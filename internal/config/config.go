@@ -41,6 +41,8 @@ type Config struct {
 			TLSKey  string `mapstructure:"tls_key"`
 		} `mapstructure:"api"`
 	} `mapstructure:"fuota_server"`
+
+	WebSocketURL string `mapstructure:"ws_url"`
 }
 
 // C holds the global configuration.

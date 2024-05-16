@@ -114,6 +114,8 @@ const configTemplate = `[general]
     # Endpoint uses TLS.
     tls_enabled={{ .ChirpStack.API.TLSEnabled }}
 
+#WS Settings
+ws_url={{ .WebSocket.URL }}
 
 # FUOTA server settings.
 [fuota_server]

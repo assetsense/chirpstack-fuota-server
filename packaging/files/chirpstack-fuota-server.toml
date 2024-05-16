@@ -103,6 +103,8 @@
     # Endpoint uses TLS.
     tls_enabled=false
 
+#WS Settings
+ws_url="wss://qa65.assetsense.com/ws"
 
 # FUOTA server settings.
 [fuota_server]

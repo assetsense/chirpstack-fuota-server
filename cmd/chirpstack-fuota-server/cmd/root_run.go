@@ -5,11 +5,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/api"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/config"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/eventhandler"
@@ -25,6 +27,7 @@ func run(cmd *cobra.Command, args []string) error {
 		setupApplicationServerClient,
 		setupEventHandler,
 		setupAPI,
+		setupWebSocket,
 	}
 
 	for _, t := range tasks {
@@ -33,10 +36,19 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	go client.SchedulePeriodicChecks(12 * time.Hour)
+
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
 
+	return nil
+}
+
+func setupWebSocket() error {
+	if err := client.SetupWebSocket(&config.C); err != nil {
+		return fmt.Errorf("setup websocket error: %w", err)
+	}
 	return nil
 }
 

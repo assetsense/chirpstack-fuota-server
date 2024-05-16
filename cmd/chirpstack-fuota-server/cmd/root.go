@@ -43,6 +43,8 @@ func init() {
 	viper.SetDefault("chirpstack.api.server", "localhost:8080")
 	viper.SetDefault("fuota_server.api.bind", "0.0.0.0:8070")
 
+	viper.SetDefault("ws_url", "wss://qa65.assetsense.com/ws")
+	
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 }

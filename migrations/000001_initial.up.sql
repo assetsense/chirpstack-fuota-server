@@ -1,3 +1,13 @@
+CREATE TABLE device (
+    deviceId BIGINT PRIMARY KEY,
+    iotModelId BIGINT,
+    profileId BIGINT,
+    firmwareVersion VARCHAR(255),
+    region BIGINT,
+    macVersion BIGINT,
+    regionParameter BIGINT
+);
+
 create table deployment (
     id uuid primary key not null,
     created_at timestamp with time zone not null,
