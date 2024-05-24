@@ -5,11 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +19,8 @@ import (
 	"github.com/brocaar/lorawan"
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	fuota "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
+	"github.com/jmoiron/sqlx"
 )
 
 // type Config struct {
@@ -32,33 +31,59 @@ import (
 // 	Frequency    int    `toml:"frequency"`
 // }
 
-var region = map[int]fuota.Region{
-	6134: fuota.Region_AU915,
-	6135: fuota.Region_CN779,
-	6136: fuota.Region_EU868,
-	6137: fuota.Region_IN865,
-	6138: fuota.Region_EU433,
-	6139: fuota.Region_ISM2400,
-	6140: fuota.Region_KR920,
-	6141: fuota.Region_AS923,
-	6142: fuota.Region_US915,
+// var region = map[int]fuota.Region{
+// 	6134: fuota.Region_AU915,
+// 	6135: fuota.Region_CN779,
+// 	6136: fuota.Region_EU868,
+// 	6137: fuota.Region_IN865,
+// 	6138: fuota.Region_EU433,
+// 	6139: fuota.Region_ISM2400,
+// 	6140: fuota.Region_KR920,
+// 	6141: fuota.Region_AS923,
+// 	6142: fuota.Region_US915,
+// }
+
+var regions = map[string]fuota.Region{
+	"AU915":   fuota.Region_AU915,
+	"CN779":   fuota.Region_CN779,
+	"EU868":   fuota.Region_EU868,
+	"IN865":   fuota.Region_IN865,
+	"EU433":   fuota.Region_EU433,
+	"ISM2400": fuota.Region_ISM2400,
+	"KR920":   fuota.Region_KR920,
+	"AS923":   fuota.Region_AS923,
+	"US915":   fuota.Region_US915,
 }
 
-type Device struct {
-	DeviceEUI  string `json:"deviceEUI"`
-	DeviceName string `json:"deviceName"`
-	// Add other device-related fields here.
+type C2Config struct {
+	ServerURL    string
+	Username     string
+	Password     string
+	Frequency    int
+	LastSyncTime string
 }
 
-type ResponseData struct {
-	FirmwareVersion string   `json:"firmwareVersion"`
-	Devices         []Device `json:"devices"`
+type FirmwareUpdateResponse struct {
+	MsgType string `json:"msg_type"`
+	Models  []struct {
+		ModelId int    `json:"modelId"`
+		Version string `json:"version"`
+	} `json:"models"`
+}
+
+type FirmwareResponse struct {
+	MsgType  string `json:"msg_type"`
+	ModelId  int    `json:"modelId"`
+	Version  string `json:"version"`
+	Firmware []byte `json:"firmware"`
 }
 
 // var C2Config = OpenC2ConfigToml()
 var WSConn *websocket.Conn
 var GrpcConn *grpc.ClientConn
 var err error
+
+var c2config C2Config = getC2ConfigFromToml()
 
 func InitGrpcConnection() {
 	dialOpts := []grpc.DialOption{
@@ -70,35 +95,27 @@ func InitGrpcConnection() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("")
 	log.Println("Grpc Connection Established")
 }
 
 func InitWSConnection() {
-
-	// username := C2Config.Username
-	// Password := C2Config.Password
-
-	username := getC2Username()
-	password := getC2Password()
-
 	//creating authentication string
-	authString := fmt.Sprintf("%s:%s", username, password)
+	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
-	websocketURL := getC2serverUrl() + encodedAuth + "/true" // Device authentication
-	// websocketURL := getC2serverUrl() //User authentication
-
+	// Device authentication
+	websocketURL := c2config.ServerURL + encodedAuth + "/true"
 	headers := make(http.Header)
-	headers.Set("Device", "Basic "+encodedAuth) //Device authentication
-	// headers.Set("Authorization", "Basic "+encodedAuth) //User authentication
+	headers.Set("Device", "Basic "+encodedAuth)
+
+	// User authentication
+	// websocketURL := getC2serverUrl()
+	// headers.Set("Authorization", "Basic "+encodedAuth)
 
 	WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
 	if err != nil {
 		log.Fatal("C2 Websocket server is offline:", err)
 	}
-
-	fmt.Println("")
 	log.Println("Websocket Connection Established")
 }
 
@@ -109,121 +126,128 @@ func CloseConnection() {
 	}
 
 	WSConn.Close()
-	fmt.Println("")
 	log.Println("Websocket Connection Closed")
 }
 
 func SendMessage(message string) {
-	// prepare request message string
-	// message = fmt.Sprintf(`{"msg_type": "req_bonded_devices", "device": "%s", "ls": 0}`, C2Config.Username)
-
 	err := WSConn.WriteMessage(websocket.TextMessage, []byte(message))
 	if err != nil {
 		log.Fatal("Write error:", err)
 	}
-	fmt.Println("")
 	log.Println("Websocket Message Sent: " + message)
 }
 
-func ReceiveMessage() {
+func ReceiveMessage() string {
+	_, message, err := WSConn.ReadMessage()
+	if err != nil {
+		log.Fatal("Read error:", err)
+	}
+	messageStr := string(message)
+	log.Println("Websocket Message received: " + messageStr)
+	return messageStr
+}
+
+func ReceiveMessageDummyForModels() string {
+	// {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{\"modelId\":1234, \"version\":\"1.0.0\"}]}]};
+
+	dummyResponseJson := `{"msg_type":"FIRMWARE_UPDATES_RES", "models":[{"modelId":1234, "version":"1.0.1"}]}`
+	log.Println("Dummy Message received: \n" + dummyResponseJson)
+	return dummyResponseJson
+}
+
+func ReceiveMessageDummyForFirmware() string {
+	// {"msg_type":"FIRMWARE_FILE_RES", "modelId": 1234, "version": "1.0.1", "firmware":base64}
+
+	dummyResponseJson := `{"msg_type": "FIRMWARE_FILE_RES","modelId": 1234,"version": "1.0.1","firmware": "SGVsbG8sIFdvcmxk"}`
+
+	log.Println("Dummy Message received: \n" + dummyResponseJson)
+	return dummyResponseJson
+}
+
+func Scheduler() {
+	ticker := time.NewTicker(time.Duration(c2config.Frequency) * time.Hour)
+	defer ticker.Stop()
+
 	for {
-		_, message, err := WSConn.ReadMessage()
-		if err != nil {
-			log.Fatal("Read error:", err)
+		select {
+		case <-ticker.C:
+			CheckForFirmwareUpdate()
 		}
-		log.Println("Websocket Message received: " + string(message))
-		handleMessage(string(message))
-		//Add condition here to stop listening for incoming messages
-		break
 	}
 }
 
-func ReceiveMessageDummy() {
-	dummyResponseJson := `[{"firmwareVersion":"1.0.0","devices":[{"deviceEUI":"500a57774bed650e","deviceName":"DeviceA","location":"Building 1, Floor 2"},{"deviceEUI":"deb16f73fe59744f","deviceName":"DeviceB","location":"Building 1, Floor 3"}]},{"firmwareVersion":"1.1.0","devices":[{"deviceEUI":"bcccfa1e80d50cff","deviceName":"DeviceC","location":"Building 2, Floor 1"},{"deviceEUI":"f6efb27acc31cb64","deviceName":"DeviceD","location":"Building 2, Floor 2"}]}]`
-	log.Println("Dummy Message received: \n" + dummyResponseJson)
-	handleMessage(dummyResponseJson)
-}
+func CheckForFirmwareUpdate() {
+	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
+	SendMessage("{\"msg_typ\":\"FIRMWARE_UPDATES\", \"ls\":0}")
 
-func ReceiveMessageDummyFromFile() {
-	filePath := "data.json"
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Fatalf("Error opening file: %v", err)
-	}
-	defer file.Close()
+	//Respose format - {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{"modelId":1234, \"version\":\"1.0.1\"}]}]};
+	response := ReceiveMessageDummyForModels()
 
-	fileContent, err := io.ReadAll(file)
-	if err != nil {
-		log.Fatalf("Error reading file: %v", err)
-	}
-
-	dummyResponseJson := string(fileContent)
-	log.Println("Dummy Message received: \n" + dummyResponseJson)
-	handleMessage(dummyResponseJson)
+	handleMessage(response)
 }
 
 func handleMessage(message string) {
-	var firmwares []ResponseData
-	if err := json.Unmarshal([]byte(message), &firmwares); err != nil {
-		log.Printf("Error unmarshaling message: %v", err)
-		return
+	var response FirmwareUpdateResponse
+	err := json.Unmarshal([]byte(message), &response)
+	if err != nil {
+		log.Fatalf("Error unmarshalling FirmwareUpdateResponse: %v", err)
 	}
 
-	// Process each firmware version
-	for _, firmware := range firmwares {
-		createBinFile(firmware.FirmwareVersion)
-		createDeploymentRequest(firmware)
+	for _, model := range response.Models {
+		fmt.Printf("Model ID: %d, Version: %s\n", model.ModelId, model.Version)
+
+		if err := storage.Transaction(func(tx sqlx.Ext) error {
+			var devices []storage.Device
+			devices, err := storage.GetDevicesByModelAndVersion(context.Background(), tx, model.ModelId, model.Version)
+			if err != nil {
+				return fmt.Errorf("GetDevicesByModelAndVersion error: %w", err)
+			}
+			if len(devices) == 0 {
+				return nil
+			}
+
+			deviceMap := make(map[string][]storage.Device)
+
+			// Separate devices based on region and store in the map
+			for _, device := range devices {
+				if err := storage.Transaction(func(tx sqlx.Ext) error {
+					var region string
+					region, err := storage.GetRegionByDeviceId(context.Background(), tx, device.DeviceId)
+					if err != nil {
+						return fmt.Errorf("GetRegionByDeviceId error: %w", err)
+					}
+					deviceMap[region] = append(deviceMap[region], device)
+					return nil
+				}); err != nil {
+					log.Fatal(err)
+				}
+			}
+
+			// Loop over the map and print the region and devices
+			for region, devices := range deviceMap {
+				go InitialiseDeploymentRequest(model.ModelId, model.Version, devices, region)
+			}
+			return nil
+		}); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
-func createBinFile(version string) {
-	dirName := "firmwares"
-	fileName := version + ".bin"
+func InitialiseDeploymentRequest(modelId int, version string, devices []storage.Device, region string) {
 
-	if _, err := os.Stat(dirName); os.IsNotExist(err) {
-		err := os.MkdirAll(dirName, os.ModePerm)
-		if err != nil {
-			log.Fatalf("Failed to create directory: %v", err)
-		}
-		fmt.Printf("Directory %s created.\n", dirName)
-	} else {
-		fmt.Printf("Directory %s already exists.\n", dirName)
-	}
-
-	filePath := filepath.Join(dirName, fileName)
-
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		file, err := os.Create(filePath)
-		if err != nil {
-			log.Fatalf("Failed to create file: %v", err)
-		}
-		defer file.Close()
-		_, err = file.Write([]byte("00000000000000000"))
-		if err != nil {
-			log.Fatalf("Failed to write to file: %v", err)
-		}
-		fmt.Printf("File %s created and written to.\n", filePath)
-	} else {
-		fmt.Printf("File %s already exists.\n", filePath)
-	}
-}
-
-func createDeploymentRequest(firmware ResponseData) {
-	//get applicationId,regionId, firmware payload from C2
-	// var applicationId string = C2Config.ApplicationId
 	var applicationId string = getApplicationId()
-	var regionId int = 6136
-	var payload []byte = getFirmwarePayload(firmware.FirmwareVersion)
+	var payload []byte = getFirmwarePayload(modelId, version)
 
-	go UpdateFirmware(firmware.FirmwareVersion, firmware.Devices, applicationId, regionId, payload)
+	createDeploymentRequest(version, devices, applicationId, region, payload)
 }
 
-func UpdateFirmware(firmwareVersion string, devices []Device, applicationId string, regionId int, payload []byte) {
+func createDeploymentRequest(firmwareVersion string, devices []storage.Device, applicationId string, region string, payload []byte) {
 	mcRootKey, err := multicastsetup.GetMcRootKeyForGenAppKey(lorawan.AES128Key{0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("FirmwareVersion: " + firmwareVersion)
+	fmt.Println("Creating deployement request for Region:", region, " FirmwareVersion:", firmwareVersion)
 
 	client := fuota.NewFuotaServerServiceClient(GrpcConn)
 
@@ -236,7 +260,7 @@ func UpdateFirmware(firmwareVersion string, devices []Device, applicationId stri
 			MulticastFrequency:                868100000,
 			MulticastGroupId:                  0,
 			MulticastTimeout:                  6,
-			MulticastRegion:                   region[regionId],
+			MulticastRegion:                   regions[region],
 			UnicastTimeout:                    ptypes.DurationProto(60 * time.Second),
 			UnicastAttemptCount:               1,
 			FragmentationFragmentSize:         50,
@@ -269,13 +293,13 @@ func UpdateFirmware(firmwareVersion string, devices []Device, applicationId stri
 	// }
 }
 
-func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []Device) []*fuota.DeploymentDevice {
+func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device) []*fuota.DeploymentDevice {
 
 	var deploymentDevices []*fuota.DeploymentDevice
 	for _, device := range devices {
-		fmt.Println("	device eui: " + device.DeviceEUI)
+		fmt.Println("	device eui: " + device.DeviceCode)
 		deploymentDevices = append(deploymentDevices, &fuota.DeploymentDevice{
-			DevEui:    device.DeviceEUI,
+			DevEui:    device.DeviceCode,
 			McRootKey: mcRootKey.String(),
 		})
 	}
@@ -283,46 +307,58 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []Device) []*fuot
 	return deploymentDevices
 }
 
-func GetStatus(id uuid.UUID) {
+func getFirmwarePayload(modelId int, version string) []byte {
+	//Request format - {“msg_type”:”FIRMWARE_FILE”, “filter”:{\”models\”:[\”modelId\”: 1234, \”version\”:”1.0.1”, \”latestVersion\”:false]}}
+	request := fmt.Sprintf(`{"msg_type":"FIRMWARE_FILE", "filter":{"models":[{"modelId":%d, "version":"%s", "latestVersion":false}]}}`, modelId, version)
+	SendMessage(request)
 
-	client := fuota.NewFuotaServerServiceClient(GrpcConn)
-
-	resp, err := client.GetDeploymentStatus(context.Background(), &fuota.GetDeploymentStatusRequest{
-		Id: id.String(),
-	})
-
-	if err != nil {
-		panic(err)
+	//Respose format - {"msg_type":"FIRMWARE_FILE_RES", "modelId": 1234, "version": "1.0.1", "firmware":base64}
+	responseMessage := ReceiveMessageDummyForFirmware()
+	var response FirmwareResponse
+	if err := json.Unmarshal([]byte(responseMessage), &response); err != nil {
+		log.Fatalf("failed to unmarshal response: %v", err)
 	}
-
-	log.Printf("deployment status: %s\n", resp.EnqueueCompletedAt)
+	firmwareBytes, err := base64.StdEncoding.DecodeString(string(response.Firmware))
+	if err != nil {
+		fmt.Println("Error decoding Base64 firmware string:", err)
+	}
+	return firmwareBytes
 }
 
-// func OpenC2ConfigToml() Config {
-// 	var cfg Config
-// 	if _, err := toml.DecodeFile("config.toml", &cfg); err != nil {
-// 		log.Println("Error reading config file:", err)
-// 	}
-// 	return cfg
-// }
+func getC2ConfigFromToml() C2Config {
 
-func Scheduler() {
-	ticker := time.NewTicker(time.Duration(getC2Frequency()) * time.Hour)
-	defer ticker.Stop()
+	viper.SetConfigName("c2int_boot_config")
+	viper.SetConfigType("toml")
+	viper.AddConfigPath("/usr/local/bin")
 
-	for {
-		select {
-		case <-ticker.C:
-			CheckForFirmwareUpdate()
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Fatalf("c2int_boot_config.toml file not found: %v", err)
+		} else {
+			log.Fatalf("Error reading c2int_boot_config.toml file: %v", err)
 		}
 	}
-}
 
-func CheckForFirmwareUpdate() {
-	SendMessage("")
-	ReceiveMessageDummyFromFile()
-	// ReceiveMessageDummy()
-	// go ReceiveMessage()
+	var c2config C2Config
+
+	c2config.Username = viper.GetString("c2App.username")
+	if c2config.Username == "" {
+		log.Fatal("username not found in c2int_boot_config.toml file")
+	}
+
+	c2config.Password = viper.GetString("c2App.password")
+	if c2config.Password == "" {
+		log.Fatal("password not found in c2int_boot_config.toml file")
+	}
+
+	c2config.ServerURL = viper.GetString("c2App.serverUrl")
+	if c2config.ServerURL == "" {
+		log.Fatal("serverUrl not found in c2int_boot_config.toml file")
+	}
+
+	c2config.Frequency = viper.GetInt("c2App.frequency")
+
+	return c2config
 }
 
 func getApplicationId() string {
@@ -347,101 +383,17 @@ func getApplicationId() string {
 	return applicationId
 }
 
-func getFirmwarePayload(version string) []byte {
-	filePath := "firmwares/" + version + ".bin"
+func GetStatus(id uuid.UUID) {
 
-	data, err := os.ReadFile(filePath)
+	client := fuota.NewFuotaServerServiceClient(GrpcConn)
+
+	resp, err := client.GetDeploymentStatus(context.Background(), &fuota.GetDeploymentStatusRequest{
+		Id: id.String(),
+	})
+
 	if err != nil {
-		log.Fatalf("Error reading the firmware binary file: %v", err)
+		panic(err)
 	}
 
-	return data
-}
-
-func getC2Username() string {
-
-	viper.SetConfigName("c2int_boot_config")
-	viper.SetConfigType("toml")
-	viper.AddConfigPath("/usr/local/bin")
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2int_boot_config.toml file not found: %v", err)
-		} else {
-			log.Fatalf("Error reading c2int_boot_config.toml file: %v", err)
-		}
-	}
-
-	username := viper.GetString("c2App.username")
-	if username == "" {
-		log.Fatal("username not found in c2int_boot_config.toml file")
-	}
-
-	return username
-}
-
-func getC2Password() string {
-
-	viper.SetConfigName("c2int_boot_config")
-	viper.SetConfigType("toml")
-	viper.AddConfigPath("/usr/local/bin")
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2int_boot_config.toml file not found: %v", err)
-		} else {
-			log.Fatalf("Error reading c2int_boot_config.toml file: %v", err)
-		}
-	}
-
-	password := viper.GetString("c2App.password")
-	if password == "" {
-		log.Fatal("password not found in c2int_boot_config.toml file")
-	}
-
-	return password
-}
-
-func getC2serverUrl() string {
-
-	viper.SetConfigName("c2int_boot_config")
-	viper.SetConfigType("toml")
-	viper.AddConfigPath("/usr/local/bin")
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2int_boot_config.toml file not found: %v", err)
-		} else {
-			log.Fatalf("Error reading c2int_boot_config.toml file: %v", err)
-		}
-	}
-
-	url := viper.GetString("c2App.serverUrl")
-	if url == "" {
-		log.Fatal("serverUrl not found in c2int_boot_config.toml file")
-	}
-
-	return url
-}
-
-func getC2Frequency() int {
-
-	viper.SetConfigName("c2int_boot_config")
-	viper.SetConfigType("toml")
-	viper.AddConfigPath("/usr/local/bin")
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2int_boot_config.toml file not found: %v", err)
-		} else {
-			log.Fatalf("Error reading c2int_boot_config.toml file: %v", err)
-		}
-	}
-
-	frequency := viper.GetInt("c2App.frequency")
-	if frequency == 0 {
-		log.Fatal("frequency not found in c2int_boot_config.toml file")
-	}
-
-	return frequency
+	log.Printf("deployment status: %s\n", resp.EnqueueCompletedAt)
 }

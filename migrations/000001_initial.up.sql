@@ -33,16 +33,21 @@ create table deployment_log (
     fields hstore 
 );
 
+CREATE TABLE device_profile (
+    profileid BIGINT PRIMARY KEY,
+    region VARCHAR(255),
+    macversion VARCHAR(255),
+    regionparameter VARCHAR(255)
+);
+
 CREATE TABLE device (
-    deviceId BIGINT PRIMARY KEY,
-	deviceCode VARCHAR(255),
-    modelId BIGINT,
- 	profileId BIGINT,
-    firmwareVersion VARCHAR(255),
- 	region VARCHAR(255),
- 	macVersion VARCHAR(255),
-    regionParameter VARCHAR(255),
- 	status BIGINT
+    deviceid BIGINT PRIMARY KEY,
+    devicecode VARCHAR(255),
+    modelid BIGINT,
+    profileid BIGINT,
+    firmwareversion VARCHAR(255),
+    status BIGINT,
+    CONSTRAINT fk_device_profile FOREIGN KEY (profileid) REFERENCES device_profile(profileid)
 );
 
 

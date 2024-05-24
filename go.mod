@@ -14,6 +14,7 @@ require (
 	github.com/goreleaser/nfpm v0.11.0
 	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
+	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/jmoiron/sqlx v1.2.1-0.20190826204134-d7d95172beb5
 	github.com/lib/pq v1.9.0
 	github.com/mitchellh/mapstructure v1.3.3

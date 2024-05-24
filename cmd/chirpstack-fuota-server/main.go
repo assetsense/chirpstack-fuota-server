@@ -62,7 +62,7 @@ func main() {
 	api.InitWSConnection()
 	api.InitGrpcConnection()
 
-	// // api.Scheduler()
+	// api.Scheduler()
 	api.CheckForFirmwareUpdate()
 
 	fmt.Scanln()
