@@ -47,7 +47,7 @@
   # * require - Always SSL (skip verification)
   # * verify-ca - Always SSL (verify that the certificate presented by the server was signed by a trusted CA)
   # * verify-full - Always SSL (verify that the certification presented by the server was signed by a trusted CA and the server host name matches the one in the certificate)
-  dsn="postgres://localhost/chirpstack_fuota?sslmode=disable"
+  dsn="postgres://chirpstack_fuota:dbpassword@localhost/chirpstack_fuota?sslmode=disable"
 
 
   # Automatically apply database migrations.
@@ -93,12 +93,6 @@
 
   # API integration settings.
   [chirpstack.api]
-
-    # ChirpStack API server endpoint.
-    server="localhost:8080"
-
-    # API token.
-    token="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6IjMyMjA4NDczLWNkZjktNGUzYi05M2JjLTBjOTRkMTQ4ZDI0NiIsInR5cCI6ImtleSJ9.STkoqRjpHFz2kDtyd09BqNrh8mHk4RojismyXbygTv8"
 
     # Endpoint uses TLS.
     tls_enabled=false

@@ -1,10 +1,12 @@
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc/grpclog"
+	"fmt"
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/cmd/chirpstack-fuota-server/cmd"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/api"
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/grpclog"
 )
 
 // grpcLogger implements a wrapper around the logrus Logger to make it
@@ -55,5 +57,13 @@ func init() {
 var version string // set by the compiler
 
 func main() {
-	cmd.Execute(version)
+	go cmd.Execute(version)
+
+	api.InitWSConnection()
+	api.InitGrpcConnection()
+
+	// // api.Scheduler()
+	api.CheckForFirmwareUpdate()
+
+	fmt.Scanln()
 }

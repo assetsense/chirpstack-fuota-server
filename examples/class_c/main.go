@@ -35,10 +35,10 @@ func main() {
 
 	resp, err := client.CreateDeployment(context.Background(), &fuota.CreateDeploymentRequest{
 		Deployment: &fuota.Deployment{
-			ApplicationId: "d9fde0d5-bcaf-4e42-8d27-417f11628905",
+			ApplicationId: "eb9e890f-f2c3-4bd1-8ed0-a311972c5b42",
 			Devices: []*fuota.DeploymentDevice{
 				{
-					DevEui:    "090000000000000000",
+					DevEui:    "deb16f73fe59744f",
 					McRootKey: mcRootKey.String(),
 				},
 			},
