@@ -1,7 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/cmd/chirpstack-fuota-server/cmd"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/api"
@@ -65,5 +67,7 @@ func main() {
 	// api.Scheduler()
 	api.CheckForFirmwareUpdate()
 
-	fmt.Scanln()
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	log.WithField("signal", <-sigChan).Info("signal received, stopping")
 }

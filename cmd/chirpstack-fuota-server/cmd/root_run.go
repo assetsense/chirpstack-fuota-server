@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -33,9 +30,9 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	log.WithField("signal", <-sigChan).Info("signal received, stopping")
+	// sigChan := make(chan os.Signal)
+	// signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	// log.WithField("signal", <-sigChan).Info("signal received, stopping")
 
 	return nil
 }

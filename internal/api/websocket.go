@@ -112,14 +112,21 @@ func InitWSConnection() {
 	// websocketURL := getC2serverUrl()
 	// headers.Set("Authorization", "Basic "+encodedAuth)
 
-	WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
-	if err != nil {
-		log.Fatal("C2 Websocket server is offline:", err)
+	for {
+		WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
+		if err != nil {
+			log.Println("Error C2", err)
+			time.Sleep(2 * time.Second)
+			continue // Retry connection in
+		}
+
+		log.Println("Websocket Connection Established")
+		break
 	}
-	log.Println("Websocket Connection Established")
+
 }
 
-func CloseConnection() {
+func CloseWSConnection() {
 	err = WSConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
 		log.Println("Write close error:", err)
@@ -129,7 +136,7 @@ func CloseConnection() {
 	log.Println("Websocket Connection Closed")
 }
 
-func SendMessage(message string) {
+func SendWSMessage(message string) {
 	err := WSConn.WriteMessage(websocket.TextMessage, []byte(message))
 	if err != nil {
 		log.Fatal("Write error:", err)
@@ -137,7 +144,7 @@ func SendMessage(message string) {
 	log.Println("Websocket Message Sent: " + message)
 }
 
-func ReceiveMessage() string {
+func ReceiveWSMessage() string {
 	_, message, err := WSConn.ReadMessage()
 	if err != nil {
 		log.Fatal("Read error:", err)
@@ -160,12 +167,13 @@ func ReceiveMessageDummyForFirmware() string {
 
 	dummyResponseJson := `{"msg_type": "FIRMWARE_FILE_RES","modelId": 1234,"version": "1.0.1","firmware": "SGVsbG8sIFdvcmxk"}`
 
-	log.Println("Dummy Message received: \n" + dummyResponseJson)
+	log.Println("Dummy Message received: " + dummyResponseJson)
 	return dummyResponseJson
 }
 
 func Scheduler() {
 	ticker := time.NewTicker(time.Duration(c2config.Frequency) * time.Hour)
+	// ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -177,11 +185,13 @@ func Scheduler() {
 }
 
 func CheckForFirmwareUpdate() {
+	log.Println("Checking for firmware updates")
 	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
-	SendMessage("{\"msg_typ\":\"FIRMWARE_UPDATES\", \"ls\":0}")
+	SendWSMessage("{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}")
 
 	//Respose format - {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{"modelId":1234, \"version\":\"1.0.1\"}]}]};
-	response := ReceiveMessageDummyForModels()
+	// response := ReceiveMessageDummyForModels()
+	response := ReceiveWSMessage()
 
 	handleMessage(response)
 }
@@ -194,7 +204,7 @@ func handleMessage(message string) {
 	}
 
 	for _, model := range response.Models {
-		fmt.Printf("Model ID: %d, Version: %s\n", model.ModelId, model.Version)
+		// fmt.Printf("Model ID: %d, Version: %s\n", model.ModelId, model.Version)
 
 		if err := storage.Transaction(func(tx sqlx.Ext) error {
 			var devices []storage.Device
@@ -203,7 +213,10 @@ func handleMessage(message string) {
 				return fmt.Errorf("GetDevicesByModelAndVersion error: %w", err)
 			}
 			if len(devices) == 0 {
+				log.Println("No devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
 				return nil
+			} else {
+				log.Println(len(devices), "devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
 			}
 
 			deviceMap := make(map[string][]storage.Device)
@@ -308,12 +321,14 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 }
 
 func getFirmwarePayload(modelId int, version string) []byte {
+	log.Println("Getting firmware file for Model Id:", modelId, "and Version:", version)
 	//Request format - {“msg_type”:”FIRMWARE_FILE”, “filter”:{\”models\”:[\”modelId\”: 1234, \”version\”:”1.0.1”, \”latestVersion\”:false]}}
-	request := fmt.Sprintf(`{"msg_type":"FIRMWARE_FILE", "filter":{"models":[{"modelId":%d, "version":"%s", "latestVersion":false}]}}`, modelId, version)
-	SendMessage(request)
+	request := fmt.Sprintf(`{"msg_type":"FIRMWARE_FILE", "filter":"{\"models\":[{\"modelId\": %d, \"version\": \"%s\", \"latestVersion\": false}]}"}`, modelId, version)
+	SendWSMessage(request)
 
 	//Respose format - {"msg_type":"FIRMWARE_FILE_RES", "modelId": 1234, "version": "1.0.1", "firmware":base64}
-	responseMessage := ReceiveMessageDummyForFirmware()
+	// responseMessage := ReceiveMessageDummyForFirmware()
+	responseMessage := ReceiveWSMessage()
 	var response FirmwareResponse
 	if err := json.Unmarshal([]byte(responseMessage), &response); err != nil {
 		log.Fatalf("failed to unmarshal response: %v", err)
