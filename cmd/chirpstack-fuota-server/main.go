@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +20,12 @@ import (
 // log these as debug info.
 type grpcLogger struct {
 	*log.Logger
+}
+
+type UDPResponse struct {
+	Src  string `json:"src"`
+	Msg  string `json:"msg"`
+	Dest string `json:"dest"`
 }
 
 func (gl *grpcLogger) V(l int) bool {
@@ -59,15 +68,79 @@ func init() {
 var version string // set by the compiler
 
 func main() {
-	go cmd.Execute(version)
+	port := "127.0.0.1:37020"
 
-	api.InitWSConnection()
-	api.InitGrpcConnection()
+	addr, err := net.ResolveUDPAddr("udp", port)
+	if err != nil {
+		fmt.Println("Error resolving UDP address:", err)
+		os.Exit(1)
+	}
 
-	// api.Scheduler()
-	api.CheckForFirmwareUpdate()
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		fmt.Println("Error listening on UDP:", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
 
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	log.WithField("signal", <-sigChan).Info("signal received, stopping")
+	fmt.Println("Listening for UDP packets on", conn.LocalAddr().String())
+
+	buffer := make([]byte, 1024)
+
+	for {
+		n, src, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			fmt.Println("Error reading from UDP:", err)
+			continue
+		}
+
+		fmt.Printf("Received from %v: %s\n", src, string(buffer[:n]))
+
+		// messageBytes := []byte("Hi, sender!")
+		// _, err = conn.WriteToUDP(messageBytes, addr)
+		// if err != nil {
+		// 	fmt.Println("Error sending message:", err)
+		// 	return
+		// }
+		var response UDPResponse
+		if err := json.Unmarshal(buffer[:n], &response); err != nil {
+			fmt.Println("Error unmarshalling response:", err)
+			return
+		}
+
+		if response.Msg == "db_init" {
+
+			if err := cmd.SetupStorage(); err != nil {
+				log.Fatal(err)
+			}
+
+			ack := UDPResponse{
+				Src:  addr.String(),
+				Msg:  string(buffer[:n]),
+				Dest: "127.0.0.1:8080",
+			}
+
+			ackStr, err := json.Marshal(ack)
+			if err != nil {
+				fmt.Println("Error marshalling response:", err)
+				return
+			}
+			conn.WriteToUDP([]byte(ackStr), addr)
+
+		} else if response.Msg == "init" {
+
+			go cmd.Execute(version)
+
+			api.InitWSConnection()
+			api.InitGrpcConnection()
+
+			// api.Scheduler()
+			api.CheckForFirmwareUpdate()
+
+			sigChan := make(chan os.Signal)
+			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+			log.WithField("signal", <-sigChan).Info("signal received, stopping")
+		}
+	}
+
 }

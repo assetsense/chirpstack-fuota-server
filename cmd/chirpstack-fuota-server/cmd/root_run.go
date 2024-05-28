@@ -18,7 +18,7 @@ func run(cmd *cobra.Command, args []string) error {
 		setLogLevel,
 		setSyslog,
 		printStartMessage,
-		setupStorage,
+		// SetupStorage,
 		setupApplicationServerClient,
 		setupEventHandler,
 		setupAPI,
@@ -49,7 +49,7 @@ func printStartMessage() error {
 	return nil
 }
 
-func setupStorage() error {
+func SetupStorage() error {
 	if err := storage.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup storage error: %w", err)
 	}
