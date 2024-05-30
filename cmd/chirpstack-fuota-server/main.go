@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -20,12 +19,6 @@ import (
 // log these as debug info.
 type grpcLogger struct {
 	*log.Logger
-}
-
-type UDPResponse struct {
-	Src  string `json:"src"`
-	Msg  string `json:"msg"`
-	Dest string `json:"dest"`
 }
 
 func (gl *grpcLogger) V(l int) bool {
@@ -65,82 +58,129 @@ func init() {
 	grpclog.SetLoggerV2(&grpcLogger{log.StandardLogger()})
 }
 
+type UDPResponse struct {
+	Src  string `json:"src"`
+	Msg  string `json:"msg"`
+	Dest string `json:"dest"`
+}
+
+var conn *net.UDPConn
+var multicastAddr *net.UDPAddr
+var err error
+
 var version string // set by the compiler
 
-func main() {
-	port := "127.0.0.1:37020"
+// func main() {
 
-	addr, err := net.ResolveUDPAddr("udp", port)
+// 	cmd.Execute(version)
+
+// 	api.InitWSConnection()
+// 	api.InitGrpcConnection()
+
+// 	// api.Scheduler()
+// 	api.CheckForFirmwareUpdate()
+
+// 	sigChan := make(chan os.Signal)
+// 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+// 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
+// }
+
+func main() {
+
+	InitUdpConnection()
+
+	go ReceiveUdpMessages()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	log.WithField("signal", <-sigChan).Info("signal received, stopping")
+}
+
+func InitUdpConnection() {
+	multicastAddrStr := "224.1.1.1:7002"
+
+	multicastAddr, err = net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {
 		fmt.Println("Error resolving UDP address:", err)
-		os.Exit(1)
 	}
+}
 
-	conn, err := net.ListenUDP("udp", addr)
+func ReceiveUdpMessages() {
+	conn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
 	if err != nil {
-		fmt.Println("Error listening on UDP:", err)
-		os.Exit(1)
+		fmt.Println("Error listening:", err)
+		return
 	}
 	defer conn.Close()
 
-	fmt.Println("Listening for UDP packets on", conn.LocalAddr().String())
+	fmt.Println("Listening for UDP packets on", multicastAddr)
 
 	buffer := make([]byte, 1024)
-
 	for {
 		n, src, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			fmt.Println("Error reading from UDP:", err)
 			continue
 		}
+		message := string(buffer[:n])
+		fmt.Printf("Received from %v: %s\n", src, message)
 
-		fmt.Printf("Received from %v: %s\n", src, string(buffer[:n]))
-
-		// messageBytes := []byte("Hi, sender!")
-		// _, err = conn.WriteToUDP(messageBytes, addr)
-		// if err != nil {
-		// 	fmt.Println("Error sending message:", err)
+		// var response UDPResponse
+		// if err := json.Unmarshal(buffer[:n], &response); err != nil {
+		// 	fmt.Println("Error unmarshalling response:", err)
 		// 	return
 		// }
-		var response UDPResponse
-		if err := json.Unmarshal(buffer[:n], &response); err != nil {
-			fmt.Println("Error unmarshalling response:", err)
-			return
-		}
 
-		if response.Msg == "db_init" {
+		go handleUdpMessage(message)
+	}
+}
 
-			if err := cmd.SetupStorage(); err != nil {
-				log.Fatal(err)
-			}
+func handleUdpMessage(message string) {
+	if message == "db_init" {
+		cmd.Execute(version)
+		SendUdpMessage("db_ready")
+	} else if message == "init" {
+		api.InitWSConnection()
+		api.InitGrpcConnection()
+		// api.Scheduler()
+		// api.CheckForFirmwareUpdate()
+		SendUdpMessage("init_ready")
+	} else {
+		fmt.Println("Received message is not valid")
+	}
+}
 
-			ack := UDPResponse{
-				Src:  addr.String(),
-				Msg:  string(buffer[:n]),
-				Dest: "127.0.0.1:8080",
-			}
+func SendUdpMessage(message string) {
+	// ack := UDPResponse{
+	// 	Src:  "mg_fuota",
+	// 	Msg:  "init_ready",
+	// 	Dest: "all",
+	// }
 
-			ackStr, err := json.Marshal(ack)
-			if err != nil {
-				fmt.Println("Error marshalling response:", err)
-				return
-			}
-			conn.WriteToUDP([]byte(ackStr), addr)
+	// ackStr, err := json.Marshal(ack)
+	// if err != nil {
+	// 	fmt.Println("Error marshalling response:", err)
+	// 	return
+	// }
+	// conn.WriteToUDP([]byte(ackStr), multicastAddr)
+	// fmt.Println("sent:", ackStr)
 
-		} else if response.Msg == "init" {
+	conn, err := net.DialUDP("udp", nil, multicastAddr)
+	if err != nil {
+		fmt.Println("Error connecting:", err)
+		return
+	}
+	defer conn.Close()
 
-			go cmd.Execute(version)
-
-			api.InitWSConnection()
-			api.InitGrpcConnection()
-
-			// api.Scheduler()
-			api.CheckForFirmwareUpdate()
-
-			sigChan := make(chan os.Signal)
-			signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-			log.WithField("signal", <-sigChan).Info("signal received, stopping")
-		}
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		fmt.Println("Error sending message:", err)
+		return
 	}
 
+	fmt.Println("Message sent:", string(message))
+}
+
+func CloseUdpConnection() {
+	conn.Close()
 }

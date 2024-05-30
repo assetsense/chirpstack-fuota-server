@@ -84,6 +84,7 @@ var GrpcConn *grpc.ClientConn
 var err error
 
 var c2config C2Config = getC2ConfigFromToml()
+var applicationId string = getApplicationId()
 
 func InitGrpcConnection() {
 	dialOpts := []grpc.DialOption{
@@ -213,10 +214,10 @@ func handleMessage(message string) {
 				return fmt.Errorf("GetDevicesByModelAndVersion error: %w", err)
 			}
 			if len(devices) == 0 {
-				log.Println("No devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
+				log.Println("No Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
 				return nil
 			} else {
-				log.Println(len(devices), "devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
+				log.Println(len(devices), "Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
 			}
 
 			deviceMap := make(map[string][]storage.Device)
@@ -235,24 +236,16 @@ func handleMessage(message string) {
 					log.Fatal(err)
 				}
 			}
-
+			var payload []byte = getFirmwarePayload(model.ModelId, model.Version)
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
-				go InitialiseDeploymentRequest(model.ModelId, model.Version, devices, region)
+				go createDeploymentRequest(model.Version, devices, applicationId, region, payload)
 			}
 			return nil
 		}); err != nil {
 			log.Fatal(err)
 		}
 	}
-}
-
-func InitialiseDeploymentRequest(modelId int, version string, devices []storage.Device, region string) {
-
-	var applicationId string = getApplicationId()
-	var payload []byte = getFirmwarePayload(modelId, version)
-
-	createDeploymentRequest(version, devices, applicationId, region, payload)
 }
 
 func createDeploymentRequest(firmwareVersion string, devices []storage.Device, applicationId string, region string, payload []byte) {

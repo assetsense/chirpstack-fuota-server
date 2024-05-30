@@ -17,8 +17,8 @@ func run(cmd *cobra.Command, args []string) error {
 	tasks := []func() error{
 		setLogLevel,
 		setSyslog,
+		setupStorage,
 		printStartMessage,
-		// SetupStorage,
 		setupApplicationServerClient,
 		setupEventHandler,
 		setupAPI,
@@ -29,10 +29,6 @@ func run(cmd *cobra.Command, args []string) error {
 			log.Fatal(err)
 		}
 	}
-
-	// sigChan := make(chan os.Signal)
-	// signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	// log.WithField("signal", <-sigChan).Info("signal received, stopping")
 
 	return nil
 }
@@ -49,7 +45,7 @@ func printStartMessage() error {
 	return nil
 }
 
-func SetupStorage() error {
+func setupStorage() error {
 	if err := storage.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup storage error: %w", err)
 	}
