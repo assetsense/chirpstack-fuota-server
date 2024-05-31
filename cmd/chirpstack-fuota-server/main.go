@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/cmd/chirpstack-fuota-server/cmd"
@@ -85,7 +86,17 @@ var version string // set by the compiler
 // 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
 // }
 
+var db_ready bool = false
+
 func main() {
+	logFile, err := os.OpenFile("mg_fuota.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
 
 	InitUdpConnection()
 
@@ -101,84 +112,96 @@ func InitUdpConnection() {
 
 	multicastAddr, err = net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {
-		fmt.Println("Error resolving UDP address:", err)
+		log.Error("Error resolving UDP address:", err)
 	}
 }
 
 func ReceiveUdpMessages() {
 	conn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
 	if err != nil {
-		fmt.Println("Error listening:", err)
+		log.Error("Error listening:", err)
 		return
 	}
 	defer conn.Close()
 
-	fmt.Println("Listening for UDP packets on", multicastAddr)
+	log.Info("Listening for UDP packets on ", multicastAddr)
 
 	buffer := make([]byte, 1024)
 	for {
 		n, src, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			fmt.Println("Error reading from UDP:", err)
+			log.Error("Error reading from UDP:", err)
 			continue
 		}
 		message := string(buffer[:n])
-		fmt.Printf("Received from %v: %s\n", src, message)
-
-		// var response UDPResponse
-		// if err := json.Unmarshal(buffer[:n], &response); err != nil {
-		// 	fmt.Println("Error unmarshalling response:", err)
-		// 	return
-		// }
+		log.Info("Received from ", src, ":", message)
 
 		go handleUdpMessage(message)
 	}
 }
 
 func handleUdpMessage(message string) {
-	if message == "db_init" {
-		cmd.Execute(version)
-		SendUdpMessage("db_ready")
-	} else if message == "init" {
-		api.InitWSConnection()
-		api.InitGrpcConnection()
-		// api.Scheduler()
-		// api.CheckForFirmwareUpdate()
-		SendUdpMessage("init_ready")
-	} else {
-		fmt.Println("Received message is not valid")
+	parts := strings.Split(message, ",")
+
+	if len(parts) != 3 {
+		log.Error("Invalid message format from udp")
+		return
 	}
+
+	source := parts[0]
+	destination := parts[1]
+	msg := parts[2]
+
+	if source == "mg_fuota" {
+		return
+	}
+
+	if destination == "mg_fuota" || destination == "all" {
+		if msg == "db_init" {
+
+			if !db_ready {
+				cmd.Execute(version)
+				db_ready = true
+			}
+
+			SendUdpMessage("mg_fuota,all,db_ready")
+
+		} else if msg == "init" {
+
+			if !db_ready {
+				SendUdpMessage("mg_fuota,all,db_not_ready")
+				return
+			}
+			api.InitWSConnection()
+			api.InitGrpcConnection()
+			SendUdpMessage("mg_fuota,all,init_ready")
+
+		} else if msg == "start" {
+
+			// api.Scheduler()
+			SendUdpMessage("mg_fuota,all,fuota_started")
+			api.CheckForFirmwareUpdate()
+		}
+	}
+
 }
 
 func SendUdpMessage(message string) {
-	// ack := UDPResponse{
-	// 	Src:  "mg_fuota",
-	// 	Msg:  "init_ready",
-	// 	Dest: "all",
-	// }
-
-	// ackStr, err := json.Marshal(ack)
-	// if err != nil {
-	// 	fmt.Println("Error marshalling response:", err)
-	// 	return
-	// }
-	// conn.WriteToUDP([]byte(ackStr), multicastAddr)
-	// fmt.Println("sent:", ackStr)
 
 	conn, err := net.DialUDP("udp", nil, multicastAddr)
 	if err != nil {
-		fmt.Println("Error connecting:", err)
+		log.Error("Error connecting:", err)
 		return
 	}
 	defer conn.Close()
 
 	_, err = conn.Write([]byte(message))
 	if err != nil {
-		fmt.Println("Error sending message:", err)
+		log.Error("Error sending message:", err)
 		return
 	}
 
-	fmt.Println("Message sent:", string(message))
+	log.Info("Message sent:", string(message))
 }
 
 func CloseUdpConnection() {

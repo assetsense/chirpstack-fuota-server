@@ -52,7 +52,7 @@ func GetDevicesByModelAndVersion(ctx context.Context, db sqlx.Queryer, modelId i
 	for _, device := range devices {
 		vFirmwareVersion, err := version.NewVersion(device.FirmwareVersion)
 		if err != nil {
-			log.Printf("invalid firmware version: %s, skipping device %d", device.FirmwareVersion, device.DeviceId)
+			log.Errorf("invalid firmware version: %s, skipping device %d", device.FirmwareVersion, device.DeviceId)
 			continue
 		}
 		if vFirmwareVersion.LessThan(vMaxVersion) {

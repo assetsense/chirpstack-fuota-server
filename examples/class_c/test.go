@@ -21,7 +21,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	message := []byte("db_init")
+	message := []byte("mg_device,all,start")
 	_, err = conn.Write(message)
 	if err != nil {
 		fmt.Println("Error sending message:", err)

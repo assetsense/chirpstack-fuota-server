@@ -5,9 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
@@ -96,7 +97,7 @@ func InitGrpcConnection() {
 	if err != nil {
 		panic(err)
 	}
-	log.Println("Grpc Connection Established")
+	log.Info("Grpc Connection Established")
 }
 
 func InitWSConnection() {
@@ -116,12 +117,12 @@ func InitWSConnection() {
 	for {
 		WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
 		if err != nil {
-			log.Println("Error C2", err)
+			log.Error("Error C2", err)
 			time.Sleep(2 * time.Second)
 			continue // Retry connection in
 		}
 
-		log.Println("Websocket Connection Established")
+		log.Info("Websocket Connection Established")
 		break
 	}
 
@@ -130,11 +131,11 @@ func InitWSConnection() {
 func CloseWSConnection() {
 	err = WSConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
-		log.Println("Write close error:", err)
+		log.Error("Write close error:", err)
 	}
 
 	WSConn.Close()
-	log.Println("Websocket Connection Closed")
+	log.Info("Websocket Connection Closed")
 }
 
 func SendWSMessage(message string) {
@@ -142,7 +143,7 @@ func SendWSMessage(message string) {
 	if err != nil {
 		log.Fatal("Write error:", err)
 	}
-	log.Println("Websocket Message Sent: " + message)
+	log.Info("Websocket Message Sent: " + message)
 }
 
 func ReceiveWSMessage() string {
@@ -151,7 +152,7 @@ func ReceiveWSMessage() string {
 		log.Fatal("Read error:", err)
 	}
 	messageStr := string(message)
-	log.Println("Websocket Message received: " + messageStr)
+	log.Info("Websocket Message received: " + messageStr)
 	return messageStr
 }
 
@@ -159,7 +160,7 @@ func ReceiveMessageDummyForModels() string {
 	// {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{\"modelId\":1234, \"version\":\"1.0.0\"}]}]};
 
 	dummyResponseJson := `{"msg_type":"FIRMWARE_UPDATES_RES", "models":[{"modelId":1234, "version":"1.0.1"}]}`
-	log.Println("Dummy Message received: \n" + dummyResponseJson)
+	log.Info("Dummy Message received: \n" + dummyResponseJson)
 	return dummyResponseJson
 }
 
@@ -168,7 +169,7 @@ func ReceiveMessageDummyForFirmware() string {
 
 	dummyResponseJson := `{"msg_type": "FIRMWARE_FILE_RES","modelId": 1234,"version": "1.0.1","firmware": "SGVsbG8sIFdvcmxk"}`
 
-	log.Println("Dummy Message received: " + dummyResponseJson)
+	log.Info("Dummy Message received: " + dummyResponseJson)
 	return dummyResponseJson
 }
 
@@ -186,7 +187,7 @@ func Scheduler() {
 }
 
 func CheckForFirmwareUpdate() {
-	log.Println("Checking for firmware updates")
+	log.Info("Checking for firmware updates")
 	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
 	SendWSMessage("{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}")
 
@@ -214,10 +215,10 @@ func handleMessage(message string) {
 				return fmt.Errorf("GetDevicesByModelAndVersion error: %w", err)
 			}
 			if len(devices) == 0 {
-				log.Println("No Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
+				log.Info("No Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
 				return nil
 			} else {
-				log.Println(len(devices), "Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
+				log.Info(len(devices), "Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
 			}
 
 			deviceMap := make(map[string][]storage.Device)
@@ -253,7 +254,7 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Creating deployement request for Region:", region, " FirmwareVersion:", firmwareVersion)
+	log.Info("Creating deployement request for Region:", region, " FirmwareVersion:", firmwareVersion)
 
 	client := fuota.NewFuotaServerServiceClient(GrpcConn)
 
@@ -303,7 +304,7 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 
 	var deploymentDevices []*fuota.DeploymentDevice
 	for _, device := range devices {
-		fmt.Println("	device eui: " + device.DeviceCode)
+		log.Info("	device eui: " + device.DeviceCode)
 		deploymentDevices = append(deploymentDevices, &fuota.DeploymentDevice{
 			DevEui:    device.DeviceCode,
 			McRootKey: mcRootKey.String(),
@@ -314,7 +315,7 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 }
 
 func getFirmwarePayload(modelId int, version string) []byte {
-	log.Println("Getting firmware file for Model Id:", modelId, "and Version:", version)
+	log.Info("Getting firmware file for Model Id:", modelId, "and Version:", version)
 	//Request format - {“msg_type”:”FIRMWARE_FILE”, “filter”:{\”models\”:[\”modelId\”: 1234, \”version\”:”1.0.1”, \”latestVersion\”:false]}}
 	request := fmt.Sprintf(`{"msg_type":"FIRMWARE_FILE", "filter":"{\"models\":[{\"modelId\": %d, \"version\": \"%s\", \"latestVersion\": false}]}"}`, modelId, version)
 	SendWSMessage(request)
@@ -328,7 +329,7 @@ func getFirmwarePayload(modelId int, version string) []byte {
 	}
 	firmwareBytes, err := base64.StdEncoding.DecodeString(string(response.Firmware))
 	if err != nil {
-		fmt.Println("Error decoding Base64 firmware string:", err)
+		log.Error("Error decoding Base64 firmware string:", err)
 	}
 	return firmwareBytes
 }
@@ -403,5 +404,5 @@ func GetStatus(id uuid.UUID) {
 		panic(err)
 	}
 
-	log.Printf("deployment status: %s\n", resp.EnqueueCompletedAt)
+	log.Info("deployment status: ", resp.EnqueueCompletedAt)
 }
