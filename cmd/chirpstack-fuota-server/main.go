@@ -99,12 +99,32 @@ func main() {
 	log.SetOutput(multiWriter)
 
 	InitUdpConnection()
+	state := api.LoadState()
+
+	if state == "dbready" {
+		InitializeDB()
+	} else if state == "sysready" {
+		InitializeDB()
+		StartScheduler()
+	}
 
 	go ReceiveUdpMessages()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
+}
+
+func InitializeDB() {
+	cmd.Execute(version)
+	db_ready = true
+}
+
+func StartScheduler() {
+	api.InitWSConnection()
+	api.InitGrpcConnection()
+	// api.Scheduler()
+	api.CheckForFirmwareUpdate()
 }
 
 func InitUdpConnection() {
@@ -152,35 +172,34 @@ func handleUdpMessage(message string) {
 	destination := parts[1]
 	msg := parts[2]
 
-	if source == "mg_fuota" {
+	if source == "mgfuota" {
 		return
 	}
 
-	if destination == "mg_fuota" || destination == "all" {
-		if msg == "db_init" {
+	if destination == "mgfuota" || destination == "all" {
+		if msg == "appinit" {
 
 			if !db_ready {
 				cmd.Execute(version)
 				db_ready = true
 			}
 
-			SendUdpMessage("mg_fuota,all,db_ready")
+			api.SaveState("dbready")
+			SendUdpMessage("mgfuota,all,dbready")
 
-		} else if msg == "init" {
+		} else if msg == "sysready" {
 
 			if !db_ready {
-				SendUdpMessage("mg_fuota,all,db_not_ready")
+				// SendUdpMessage("mg_fuota,all,db_not_ready")
 				return
 			}
+			api.SaveState("sysready")
 			api.InitWSConnection()
 			api.InitGrpcConnection()
-			SendUdpMessage("mg_fuota,all,init_ready")
-
-		} else if msg == "start" {
-
 			// api.Scheduler()
-			SendUdpMessage("mg_fuota,all,fuota_started")
 			api.CheckForFirmwareUpdate()
+			// SendUdpMessage("mg_fuota,all,init_ready")
+
 		}
 	}
 
