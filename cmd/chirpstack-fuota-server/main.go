@@ -86,8 +86,6 @@ var version string // set by the compiler
 // 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
 // }
 
-var db_ready bool = false
-
 func main() {
 	logFile, err := os.OpenFile("mg_fuota.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -99,14 +97,14 @@ func main() {
 	log.SetOutput(multiWriter)
 
 	InitUdpConnection()
-	state := api.LoadState()
+	// state := api.LoadState()
 
-	if state == "dbready" {
-		InitializeDB()
-	} else if state == "sysready" {
-		InitializeDB()
-		StartScheduler()
-	}
+	// if state == "dbready" {
+	// 	InitializeDB()
+	// } else if state == "sysready" {
+	// 	InitializeDB()
+	// 	StartScheduler()
+	// }
 
 	go ReceiveUdpMessages()
 
@@ -117,7 +115,6 @@ func main() {
 
 func InitializeDB() {
 	cmd.Execute(version)
-	db_ready = true
 }
 
 func StartScheduler() {
@@ -179,26 +176,13 @@ func handleUdpMessage(message string) {
 	if destination == "mgfuota" || destination == "all" {
 		if msg == "appinit" {
 
-			if !db_ready {
-				cmd.Execute(version)
-				db_ready = true
-			}
-
-			api.SaveState("dbready")
-			SendUdpMessage("mgfuota,all,dbready")
+			InitializeDB()
+			// api.SaveState("dbready")
 
 		} else if msg == "sysready" {
 
-			if !db_ready {
-				// SendUdpMessage("mg_fuota,all,db_not_ready")
-				return
-			}
-			api.SaveState("sysready")
-			api.InitWSConnection()
-			api.InitGrpcConnection()
-			// api.Scheduler()
-			api.CheckForFirmwareUpdate()
-			// SendUdpMessage("mg_fuota,all,init_ready")
+			// api.SaveState("sysready")
+			StartScheduler()
 
 		}
 	}

@@ -110,7 +110,7 @@ func GetTagsFromC2WS() {
 func CreatChannel() {
 	// Define the URL and JSON request body
 	fmt.Print(channelName + " ")
-	url := "http://192.168.1.23:57412/config/v1/project/channels/"
+	url := "http://127.0.0.1:57412/config/v1/project/channels/"
 
 	jsonString := `{
 		"common.ALLTYPES_NAME": "new-channel",
@@ -161,7 +161,7 @@ func CreatChannel() {
 func CreateDevice(deviceName string) {
 	// Define the URL and JSON request body
 	fmt.Print(deviceName + " ")
-	url := "http://192.168.1.23:57412/config/v1/project/channels/" + channelName + "/devices/"
+	url := "http://127.0.0.1:57412/config/v1/project/channels/" + channelName + "/devices/"
 
 	jsonString := `{
 		"common.ALLTYPES_NAME": "new-dev",
@@ -218,7 +218,7 @@ func CreateDevice(deviceName string) {
 
 func AddTagToKep(devicename, name, desc string) {
 	// Define the URL and JSON request body
-	url := "http://192.168.1.23:57412/config/v1/project/channels/" + channelName + "/devices/" + devicename + "/tags"
+	url := "http://127.0.0.1:57412/config/v1/project/channels/" + channelName + "/devices/" + devicename + "/tags"
 
 	jsonString := `{
 		"common.ALLTYPES_NAME": "new-tag",

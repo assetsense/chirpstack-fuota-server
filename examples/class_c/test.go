@@ -21,7 +21,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	message := []byte("mgdevice,all,appinit")
+	message := []byte("mgdevice,all,sysready")
 	_, err = conn.Write(message)
 	if err != nil {
 		fmt.Println("Error sending message:", err)

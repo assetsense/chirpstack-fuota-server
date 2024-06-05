@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -34,13 +33,17 @@ func Setup(conf *config.Config) error {
 	}
 	d.SetMaxOpenConns(conf.PostgreSQL.MaxOpenConnections)
 	d.SetMaxIdleConns(conf.PostgreSQL.MaxIdleConnections)
-	for {
-		if err := d.Ping(); err != nil {
-			log.WithError(err).Warning("storage: ping PostgreSQL database error, will retry in 2s")
-			time.Sleep(time.Second * 2)
-		} else {
-			break
-		}
+	// for {
+	// 	if err := d.Ping(); err != nil {
+	// 		log.WithError(err).Warning("storage: ping PostgreSQL database error, will retry in 2s")
+	// 		time.Sleep(time.Second * 2)
+	// 	} else {
+	// 		break
+	// 	}
+	// }
+	if err := d.Ping(); err != nil {
+		log.WithError(err).Warning("storage: ping PostgreSQL database error")
+		return err
 	}
 
 	db = d
