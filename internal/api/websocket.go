@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -60,7 +62,7 @@ type C2Config struct {
 	ServerURL    string
 	Username     string
 	Password     string
-	Frequency    int
+	Frequency    string
 	LastSyncTime string
 }
 
@@ -174,15 +176,52 @@ func ReceiveMessageDummyForFirmware() string {
 }
 
 func Scheduler() {
-	ticker := time.NewTicker(time.Duration(c2config.Frequency) * time.Hour)
-	// ticker := time.NewTicker(2 * time.Second)
+	frequency, err := ParseFrequency(c2config.Frequency)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
+
 	defer ticker.Stop()
 
+	CheckForFirmwareUpdate()
 	for {
 		select {
 		case <-ticker.C:
 			CheckForFirmwareUpdate()
 		}
+	}
+}
+
+func ParseFrequency(frequency string) (int, error) {
+	log.Println("Frequency is:", frequency)
+	if len(frequency) == 0 {
+		return 0, errors.New("frequency cannot be empty")
+	}
+
+	if frequency == "0" {
+		return 0, errors.New("frequency cannot be 0")
+	}
+
+	numStr := frequency[:len(frequency)-1]
+	unit := frequency[len(frequency)-1]
+
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert the frequency to minutes
+	switch unit {
+	case 'm':
+		return num, nil // Already in minutes
+	case 'h':
+		return num * 60, nil // Convert hours to minutes
+	case 'd':
+		return num * 1440, nil // Convert days to minutes
+	default:
+		return 0, errors.New("frequency format is invalid (ex:1m,1h,1d)")
 	}
 }
 
@@ -215,10 +254,10 @@ func handleMessage(message string) {
 				return fmt.Errorf("GetDevicesByModelAndVersion error: %w", err)
 			}
 			if len(devices) == 0 {
-				log.Info("No Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
+				log.Info("No Active devices in DB of Model Id:", model.ModelId, " and Version <", model.Version)
 				return nil
 			} else {
-				log.Info(len(devices), "Active devices in DB of Model Id:", model.ModelId, "and Version <", model.Version)
+				log.Info(len(devices), " Active devices in DB of Model Id:", model.ModelId, " and Version <", model.Version)
 			}
 
 			deviceMap := make(map[string][]storage.Device)
@@ -227,7 +266,7 @@ func handleMessage(message string) {
 			for _, device := range devices {
 				if err := storage.Transaction(func(tx sqlx.Ext) error {
 					var region string
-					region, err := storage.GetRegionByDeviceId(context.Background(), tx, device.DeviceId)
+					region, err := storage.GetRegionByDeviceCode(context.Background(), tx, device.DeviceCode)
 					if err != nil {
 						return fmt.Errorf("GetRegionByDeviceId error: %w", err)
 					}
@@ -304,7 +343,7 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 
 	var deploymentDevices []*fuota.DeploymentDevice
 	for _, device := range devices {
-		log.Info("	device eui: " + device.DeviceCode)
+		log.Info("device eui: " + device.DeviceCode)
 		deploymentDevices = append(deploymentDevices, &fuota.DeploymentDevice{
 			DevEui:    device.DeviceCode,
 			McRootKey: mcRootKey.String(),
@@ -336,15 +375,15 @@ func getFirmwarePayload(modelId int, version string) []byte {
 
 func getC2ConfigFromToml() C2Config {
 
-	viper.SetConfigName("c2int_boot_config")
+	viper.SetConfigName("c2intbootconfig")
 	viper.SetConfigType("toml")
 	viper.AddConfigPath("/usr/local/bin")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2int_boot_config.toml file not found: %v", err)
+			log.Fatalf("c2intbootconfig.toml file not found: %v", err)
 		} else {
-			log.Fatalf("Error reading c2int_boot_config.toml file: %v", err)
+			log.Fatalf("Error reading c2intbootconfig.toml file: %v", err)
 		}
 	}
 
@@ -352,41 +391,41 @@ func getC2ConfigFromToml() C2Config {
 
 	c2config.Username = viper.GetString("c2App.username")
 	if c2config.Username == "" {
-		log.Fatal("username not found in c2int_boot_config.toml file")
+		log.Fatal("username not found in c2intbootconfig.toml file")
 	}
 
 	c2config.Password = viper.GetString("c2App.password")
 	if c2config.Password == "" {
-		log.Fatal("password not found in c2int_boot_config.toml file")
+		log.Fatal("password not found in c2intbootconfig.toml file")
 	}
 
 	c2config.ServerURL = viper.GetString("c2App.serverUrl")
 	if c2config.ServerURL == "" {
-		log.Fatal("serverUrl not found in c2int_boot_config.toml file")
+		log.Fatal("serverUrl not found in c2intbootconfig.toml file")
 	}
 
-	c2config.Frequency = viper.GetInt("c2App.frequency")
+	c2config.Frequency = viper.GetString("c2App.frequency")
 
 	return c2config
 }
 
 func getApplicationId() string {
 
-	viper.SetConfigName("c2int_runtime_config")
+	viper.SetConfigName("c2intruntimeconfig")
 	viper.SetConfigType("toml")
 	viper.AddConfigPath("/usr/local/bin")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2int_runtime_config.toml file not found: %v", err)
+			log.Fatalf("c2intruntimeconfig.toml file not found: %v", err)
 		} else {
-			log.Fatalf("Error reading c2int_runtime_config.toml file: %v", err)
+			log.Fatalf("Error reading c2intruntimeconfig.toml file: %v", err)
 		}
 	}
 
 	applicationId := viper.GetString("chirpstack.application.id")
 	if applicationId == "" {
-		log.Fatal("Application id not found in c2int_runtime_config.toml file")
+		log.Fatal("Application id not found in c2intruntimeconfig.toml file")
 	}
 
 	return applicationId

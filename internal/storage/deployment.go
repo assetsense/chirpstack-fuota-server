@@ -38,7 +38,7 @@ func CreateDeployment(ctx context.Context, db sqlx.Execer, d *Deployment) error 
 	d.UpdatedAt = now
 
 	_, err := db.Exec(`
-		insert into deployment (
+		insert into chirpstack.deployment (
 			id,
 			created_at,
 			updated_at,
@@ -71,7 +71,7 @@ func CreateDeployment(ctx context.Context, db sqlx.Execer, d *Deployment) error 
 // GetDeployment returns the Deployment given an ID.
 func GetDeployment(ctx context.Context, db sqlx.Queryer, id uuid.UUID) (Deployment, error) {
 	var d Deployment
-	err := sqlx.Get(db, &d, "select * from deployment where id = $1", id)
+	err := sqlx.Get(db, &d, "select * from chirpstack.deployment where id = $1", id)
 	if err != nil {
 		return d, fmt.Errorf("sql select error: %w", err)
 	}
@@ -84,7 +84,7 @@ func UpdateDeployment(ctx context.Context, db sqlx.Execer, d *Deployment) error 
 	d.UpdatedAt = time.Now()
 
 	res, err := db.Exec(`
-		update deployment set
+		update chirpstack.deployment set
 			updated_at = $2,
 			mc_group_setup_completed_at = $3,
 			mc_session_completed_at = $4,

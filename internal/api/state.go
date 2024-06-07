@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var stateFile string = "fuota_state.toml"
+var stateFile string = "appstate.toml"
 
 func LoadState() string {
 	viper.SetConfigName(stateFile)
@@ -24,7 +24,7 @@ func LoadState() string {
 		}
 	}
 
-	state := viper.GetString("state")
+	state := viper.GetString("mgfuota")
 
 	return state
 }

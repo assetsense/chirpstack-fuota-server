@@ -31,7 +31,7 @@ func CreateDeploymentDevice(ctx context.Context, db sqlx.Execer, dd *DeploymentD
 	dd.UpdatedAt = now
 
 	_, err := db.Exec(`
-		insert into deployment_device (
+		insert into chirpstack.deployment_device (
 			deployment_id,
 			dev_eui,
 			created_at,
@@ -65,7 +65,7 @@ func CreateDeploymentDevice(ctx context.Context, db sqlx.Execer, dd *DeploymentD
 // GetDeploymentDevice returns the DeploymentDevice for the given Deployment ID and DevEUI.
 func GetDeploymentDevice(ctx context.Context, db sqlx.Queryer, deploymentID uuid.UUID, devEUI lorawan.EUI64) (DeploymentDevice, error) {
 	var dd DeploymentDevice
-	err := sqlx.Get(db, &dd, "select * from deployment_device where deployment_id = $1 and dev_eui = $2", deploymentID, devEUI)
+	err := sqlx.Get(db, &dd, "select * from chirpstack.deployment_device where deployment_id = $1 and dev_eui = $2", deploymentID, devEUI)
 	if err != nil {
 		return dd, fmt.Errorf("sql select error: %w", err)
 	}
@@ -78,7 +78,7 @@ func UpdateDeploymentDevice(ctx context.Context, db sqlx.Execer, dd *DeploymentD
 	dd.UpdatedAt = time.Now()
 
 	res, err := db.Exec(`
-		update deployment_device set
+		update chirpstack.deployment_device set
 			updated_at = $3,
 			mc_group_setup_completed_at = $4,
 			mc_session_completed_at = $5,
@@ -116,7 +116,7 @@ func UpdateDeploymentDevice(ctx context.Context, db sqlx.Execer, dd *DeploymentD
 // GetDeploymentDevices returns the DeploymentDevices for the given Deployment ID.
 func GetDeploymentDevices(ctx context.Context, db sqlx.Queryer, deploymentID uuid.UUID) ([]DeploymentDevice, error) {
 	var dds []DeploymentDevice
-	err := sqlx.Select(db, &dds, "select * from deployment_device where deployment_id = $1", deploymentID)
+	err := sqlx.Select(db, &dds, "select * from chirpstack.deployment_device where deployment_id = $1", deploymentID)
 	if err != nil {
 		return nil, fmt.Errorf("sql select error: %w", err)
 	}

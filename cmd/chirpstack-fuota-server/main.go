@@ -93,17 +93,16 @@ func main() {
 	}
 	defer logFile.Close()
 
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	// multiWriter := io.MultiWriter(os.Stdout, logFile)
+	multiWriter := io.MultiWriter(os.Stdout)
 	log.SetOutput(multiWriter)
 
 	InitUdpConnection()
 	// state := api.LoadState()
 
 	// if state == "dbready" {
+	// 	log.Println("Setting to previous state:", state)
 	// 	InitializeDB()
-	// } else if state == "sysready" {
-	// 	InitializeDB()
-	// 	StartScheduler()
 	// }
 
 	go ReceiveUdpMessages()
@@ -114,14 +113,15 @@ func main() {
 }
 
 func InitializeDB() {
+	api.InitWSConnection()
 	cmd.Execute(version)
+
 }
 
 func StartScheduler() {
-	api.InitWSConnection()
 	api.InitGrpcConnection()
-	// api.Scheduler()
-	api.CheckForFirmwareUpdate()
+	api.Scheduler()
+	// api.CheckForFirmwareUpdate()
 }
 
 func InitUdpConnection() {
@@ -182,6 +182,12 @@ func handleUdpMessage(message string) {
 		} else if msg == "sysready" {
 
 			// api.SaveState("sysready")
+			// state := api.LoadState()
+			// if state == "dbready" {
+			// 	StartScheduler()
+			// } else {
+			// 	log.Error("Initialise DB to Start Scheduler")
+			// }
 			StartScheduler()
 
 		}

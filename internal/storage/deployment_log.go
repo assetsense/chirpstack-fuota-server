@@ -29,7 +29,7 @@ func CreateDeploymentLog(ctx context.Context, db sqlx.Queryer, dl *DeploymentLog
 	dl.CreatedAt = time.Now()
 
 	err := sqlx.Get(db, &dl.ID, `
-		insert into deployment_log (
+		insert into chirpstack.deployment_log (
 			created_at,
 			deployment_id,
 			dev_eui,
@@ -67,7 +67,7 @@ func GetDeploymentLogsForDevice(ctx context.Context, db sqlx.Queryer, deployment
 		select
 			*
 		from
-			deployment_log
+			chirpstack.deployment_log
 		where
 			deployment_id = $1
 			and dev_eui = $2

@@ -16,25 +16,32 @@ import (
 
 func run(cmd *cobra.Command, args []string) error {
 	tasks := []func() error{
-		setLogLevel,
-		setSyslog,
-		setupStorage,
-		printStartMessage,
-		setupApplicationServerClient,
-		setupEventHandler,
-		setupAPI,
+		setLogLevel,                  //0
+		setSyslog,                    //1
+		setupStorage,                 //2
+		printStartMessage,            //3
+		setupEventHandler,            //4
+		setupApplicationServerClient, //5
+		setupAPI,                     //6
 	}
 
 	for i, t := range tasks {
 		if err := t(); err != nil {
+			log.Error(err)
 			if i == 2 {
 				SendUdpMessage("mgfuota,all,2001:DB connection failed")
+			} else if i == 4 {
+				SendUdpMessage("mgfuota,all,2002:Event handler setup failed")
+			} else if i == 5 {
+				SendUdpMessage("mgfuota,all,2003:Chirpstack connection failed")
+			} else if i == 6 {
+				SendUdpMessage("mgfuota,all,2004:Fuota grpc setup failed")
 			}
 			// log.Error(err)
 			return nil
 		}
 	}
-	SendUdpMessage("mgfuota,all,dbready")
+	SendUdpMessage("mgfuota,all,success")
 
 	return nil
 }
@@ -53,8 +60,8 @@ func printStartMessage() error {
 
 func setupStorage() error {
 	if err := storage.Setup(&config.C); err != nil {
-		// return fmt.Errorf("setup storage error: %w", err)
-		return err
+		return fmt.Errorf("setup storage error: %w", err)
+		// return err
 	}
 	return nil
 }
@@ -62,6 +69,7 @@ func setupStorage() error {
 func setupEventHandler() error {
 	if err := eventhandler.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup event-handler error: %w", err)
+		// return err
 	}
 	return nil
 }
@@ -69,6 +77,7 @@ func setupEventHandler() error {
 func setupApplicationServerClient() error {
 	if err := as.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup application-server client error: %w", err)
+		// return err
 	}
 	return nil
 }
@@ -76,6 +85,7 @@ func setupApplicationServerClient() error {
 func setupAPI() error {
 	if err := api.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup api error: %w", err)
+		// return err
 	}
 	return nil
 }

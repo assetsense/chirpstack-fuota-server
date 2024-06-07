@@ -19,7 +19,6 @@ type DeviceProfile struct {
 
 // Device represents a row in the device table
 type Device struct {
-	DeviceId        int    `db:"deviceid"`
 	DeviceCode      string `db:"devicecode"`
 	ModelId         int    `db:"modelid"`
 	ProfileId       int    `db:"profileid"`
@@ -33,8 +32,8 @@ func GetDevicesByModelAndVersion(ctx context.Context, db sqlx.Queryer, modelId i
 
 	// Query devices with the specified modelId
 	query := `
-		SELECT deviceid, devicecode, modelid, profileid, firmwareversion, status
-		FROM device
+		SELECT devicecode, modelid, profileid, firmwareversion, status
+		FROM chirpstack.device
 		WHERE modelid = $1 and status = 4270
 	`
 	if err := sqlx.Select(db, &devices, query, modelId); err != nil {
@@ -52,7 +51,7 @@ func GetDevicesByModelAndVersion(ctx context.Context, db sqlx.Queryer, modelId i
 	for _, device := range devices {
 		vFirmwareVersion, err := version.NewVersion(device.FirmwareVersion)
 		if err != nil {
-			log.Errorf("invalid firmware version: %s, skipping device %d", device.FirmwareVersion, device.DeviceId)
+			log.Errorf("invalid firmware version: %s, skipping device %s", device.FirmwareVersion, device.DeviceCode)
 			continue
 		}
 		if vFirmwareVersion.LessThan(vMaxVersion) {
@@ -63,20 +62,20 @@ func GetDevicesByModelAndVersion(ctx context.Context, db sqlx.Queryer, modelId i
 	return filteredDevices, nil
 }
 
-// GetRegionByDeviceId returns the region from profile id
-func GetRegionByDeviceId(ctx context.Context, db sqlx.Queryer, deviceId int) (string, error) {
+// GetRegionByDeviceCode returns the region from profile id
+func GetRegionByDeviceCode(ctx context.Context, db sqlx.Queryer, deviceCode string) (string, error) {
 
 	var region string
 	query := `
 		SELECT region
-		FROM device_profile
+		FROM chirpstack.device_profile
 		WHERE profileId = (
 			SELECT profileId
-			FROM device
-			WHERE deviceId = $1
+			FROM chirpstack.device
+			WHERE deviceCode = $1
 		);
 	`
-	err := sqlx.Get(db, &region, query, deviceId)
+	err := sqlx.Get(db, &region, query, deviceCode)
 	if err != nil {
 		return region, fmt.Errorf("sql select error: %w", err)
 	}
@@ -84,15 +83,15 @@ func GetRegionByDeviceId(ctx context.Context, db sqlx.Queryer, deviceId int) (st
 	return region, nil
 }
 
-func UpdateDeviceStatus(ctx context.Context, db sqlx.Execer, deviceId int, status int) error {
+func UpdateDeviceStatus(ctx context.Context, db sqlx.Execer, deviceCode string, status int) error {
 
 	res, err := db.Exec(`
-		update device set
+		update chirpstack.device set
 			status = $1,
 		where
-			deviceId = $2`,
+			deviceCode = $2`,
 		status,
-		deviceId,
+		deviceCode,
 	)
 	if err != nil {
 		return fmt.Errorf("sql update error: %w", err)
@@ -106,22 +105,22 @@ func UpdateDeviceStatus(ctx context.Context, db sqlx.Execer, deviceId int, statu
 	}
 
 	log.WithFields(log.Fields{
-		"deviceId": deviceId,
-		"status":   status,
+		"deviceCode": deviceCode,
+		"status":     status,
 	}).Info("storage: device status updated")
 
 	return nil
 }
 
-func UpdateDeviceFirmwareVersion(ctx context.Context, db sqlx.Execer, deviceId int, firmwareVersion string) error {
+func UpdateDeviceFirmwareVersion(ctx context.Context, db sqlx.Execer, deviceCode string, firmwareVersion string) error {
 
 	res, err := db.Exec(`
-		update device set
+		update chirpstack.device set
 			firmwareVersion = $1,
 		where
-			deviceId = $2`,
+			deviceCode = $2`,
 		firmwareVersion,
-		deviceId,
+		deviceCode,
 	)
 	if err != nil {
 		return fmt.Errorf("sql update error: %w", err)
@@ -135,7 +134,7 @@ func UpdateDeviceFirmwareVersion(ctx context.Context, db sqlx.Execer, deviceId i
 	}
 
 	log.WithFields(log.Fields{
-		"deviceId":        deviceId,
+		"deviceCode":      deviceCode,
 		"firmwareVersion": firmwareVersion,
 	}).Info("storage: device status updated")
 
