@@ -41,7 +41,7 @@ func run(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	SendUdpMessage("mgfuota,all,success")
+	SendUdpMessage("mgfuota,all,appinitsuccess")
 
 	return nil
 }

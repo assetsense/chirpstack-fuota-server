@@ -86,6 +86,8 @@ var version string // set by the compiler
 // 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
 // }
 
+var state int = 0
+
 func main() {
 	logFile, err := os.OpenFile("mg_fuota.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -105,6 +107,7 @@ func main() {
 	// 	InitializeDB()
 	// }
 
+	SendUdpMessage("mgfuota,all,started")
 	go ReceiveUdpMessages()
 
 	sigChan := make(chan os.Signal, 1)
@@ -112,14 +115,18 @@ func main() {
 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
 }
 
-func InitializeDB() {
-	api.InitWSConnection()
-	cmd.Execute(version)
+func ConnectToC2() error {
+	return api.InitWSConnection()
 
+}
+
+func InitializeDB() {
+	cmd.Execute(version)
 }
 
 func StartScheduler() {
 	api.InitGrpcConnection()
+
 	api.Scheduler()
 	// api.CheckForFirmwareUpdate()
 }
@@ -173,14 +180,43 @@ func handleUdpMessage(message string) {
 		return
 	}
 
-	if destination == "mgfuota" || destination == "all" {
-		if msg == "appinit" {
+	// 0 -> STARTED
+	// 1 -> C2CONNECTED
+	// 2 -> DBREADY
+	// 3 -> DBSYSNCED
+	// 4 -> RUNNING
 
-			InitializeDB()
+	if destination == "mgfuota" || destination == "all" {
+
+		if msg == "c2connect" {
+			if state == 0 {
+				err = ConnectToC2()
+				if err != nil {
+					SendUdpMessage("mgfuota,all,2005:C2WS connection failed")
+				} else {
+					state = 1
+					SendUdpMessage("mgfuota,all,c2connectsuccess")
+				}
+			}
+
+		} else if msg == "appinit" {
+			if state == 1 {
+				InitializeDB()
+				state = 2
+			}
 			// api.SaveState("dbready")
 
-		} else if msg == "sysready" {
+		} else if msg == "dbready" {
+			if state == 2 {
+				SendUdpMessage("mgfuota,all,dbreadysuccess")
+				state = 3
+			}
 
+		} else if msg == "sysready" {
+			if state == 3 {
+				state = 4
+				StartScheduler()
+			}
 			// api.SaveState("sysready")
 			// state := api.LoadState()
 			// if state == "dbready" {
@@ -188,7 +224,6 @@ func handleUdpMessage(message string) {
 			// } else {
 			// 	log.Error("Initialise DB to Start Scheduler")
 			// }
-			StartScheduler()
 
 		}
 	}

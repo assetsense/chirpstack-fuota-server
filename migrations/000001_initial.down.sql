@@ -6,4 +6,4 @@ drop table chirpstack.deployment_device;
 drop table chirpstack.deployment;
 drop table chirpstack.device_profile;
 drop table chirpstack.device;
-drop schema chirpstack;
+

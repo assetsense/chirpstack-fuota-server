@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -102,7 +103,7 @@ func InitGrpcConnection() {
 	log.Info("Grpc Connection Established")
 }
 
-func InitWSConnection() {
+func InitWSConnection() error {
 	//creating authentication string
 	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
@@ -116,17 +117,19 @@ func InitWSConnection() {
 	// websocketURL := getC2serverUrl()
 	// headers.Set("Authorization", "Basic "+encodedAuth)
 
-	for {
-		WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
-		if err != nil {
-			log.Error("Error C2", err)
-			time.Sleep(2 * time.Second)
-			continue // Retry connection in
-		}
-
-		log.Info("Websocket Connection Established")
-		break
+	// for {
+	WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
+	if err != nil {
+		log.Error("Error C2", err)
+		// time.Sleep(2 * time.Second)
+		// continue // Retry connection in
+		return err
 	}
+	// SendUdpMessage("mgfuota,all,c2connectsuccess")
+	log.Info("Websocket Connection Established")
+	// break
+	// }
+	return nil
 
 }
 
@@ -185,6 +188,7 @@ func Scheduler() {
 
 	defer ticker.Stop()
 
+	SendUdpMessage("mgfuota,all,sysreadysuccess")
 	CheckForFirmwareUpdate()
 	for {
 		select {
@@ -444,4 +448,27 @@ func GetStatus(id uuid.UUID) {
 	}
 
 	log.Info("deployment status: ", resp.EnqueueCompletedAt)
+}
+
+func SendUdpMessage(message string) {
+	multicastAddrStr := "224.1.1.1:7002"
+
+	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
+	if err != nil {
+		log.Error("Error resolving UDP address:", err)
+	}
+	conn, err := net.DialUDP("udp", nil, multicastAddr)
+	if err != nil {
+		log.Error("Error connecting:", err)
+		return
+	}
+	defer conn.Close()
+
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		log.Error("Error sending message:", err)
+		return
+	}
+
+	log.Info("Message sent:", string(message))
 }

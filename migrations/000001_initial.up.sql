@@ -1,5 +1,3 @@
-create schema chirpstack;
-
 create table chirpstack.deployment (
     id uuid primary key not null,
     created_at timestamp with time zone not null,
