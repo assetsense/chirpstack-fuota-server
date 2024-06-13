@@ -67,12 +67,14 @@ func init() {
 }
 
 // Execute executes the root command.
-func Execute(v string) {
+func Execute(v string) error {
 	version = v
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		// log.Fatal(err)
+		return err
 	}
+	return nil
 }
 
 func initConfig() {

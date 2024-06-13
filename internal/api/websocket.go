@@ -161,6 +161,15 @@ func ReceiveWSMessage() string {
 	return messageStr
 }
 
+func ReceiveWSMessageBinary() []byte {
+	_, message, err := WSConn.ReadMessage()
+	if err != nil {
+		log.Fatal("Read error:", err)
+	}
+	log.Info("Websocket Message received: " + string(message))
+	return message
+}
+
 func ReceiveMessageDummyForModels() string {
 	// {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{\"modelId\":1234, \"version\":\"1.0.0\"}]}]};
 
@@ -365,15 +374,17 @@ func getFirmwarePayload(modelId int, version string) []byte {
 
 	//Respose format - {"msg_type":"FIRMWARE_FILE_RES", "modelId": 1234, "version": "1.0.1", "firmware":base64}
 	// responseMessage := ReceiveMessageDummyForFirmware()
-	responseMessage := ReceiveWSMessage()
-	var response FirmwareResponse
-	if err := json.Unmarshal([]byte(responseMessage), &response); err != nil {
-		log.Fatalf("failed to unmarshal response: %v", err)
-	}
-	firmwareBytes, err := base64.StdEncoding.DecodeString(string(response.Firmware))
-	if err != nil {
-		log.Error("Error decoding Base64 firmware string:", err)
-	}
+	// responseMessage := ReceiveWSMessage()
+
+	// var response FirmwareResponse
+	// if err := json.Unmarshal([]byte(responseMessage), &response); err != nil {
+	// 	log.Fatalf("failed to unmarshal response: %v", err)
+	// }
+	// firmwareBytes, err := base64.StdEncoding.DecodeString(string(response.Firmware))
+	// if err != nil {
+	// 	log.Error("Error decoding Base64 firmware string:", err)
+	// }
+	firmwareBytes := ReceiveWSMessageBinary()
 	return firmwareBytes
 }
 

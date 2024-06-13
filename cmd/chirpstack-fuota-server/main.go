@@ -120,8 +120,12 @@ func ConnectToC2() error {
 
 }
 
-func InitializeDB() {
-	cmd.Execute(version)
+func InitializeDB() error {
+	err := cmd.Execute(version)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func StartScheduler() {
@@ -201,8 +205,12 @@ func handleUdpMessage(message string) {
 
 		} else if msg == "appinit" {
 			if state == 1 {
-				InitializeDB()
-				state = 2
+				err = InitializeDB()
+				if err != nil {
+					state = 1
+				} else {
+					state = 2
+				}
 			}
 			// api.SaveState("dbready")
 
