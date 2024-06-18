@@ -20,7 +20,6 @@ import (
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	"github.com/brocaar/lorawan/gps"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
-	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/eventhandler"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/chirpstack/chirpstack/api/go/v4/common"
@@ -263,8 +262,9 @@ func (d *Deployment) GetID() uuid.UUID {
 
 // Run starts the FUOTA update.
 func (d *Deployment) Run(ctx context.Context) error {
-	eventhandler.Get().RegisterUplinkEventFunc(d.GetID(), d.HandleUplinkEvent)
-	defer eventhandler.Get().UnregisterUplinkEventFunc(d.GetID())
+	// eventhandler.Get().RegisterUplinkEventFunc(d.GetID(), d.HandleUplinkEvent)
+	// defer eventhandler.Get().UnregisterUplinkEventFunc(d.GetID())
+	d.ReceiveRabbitMq(ctx)
 
 	steps := []func(context.Context) error{
 		d.stepCreateMulticastGroup,
@@ -296,6 +296,7 @@ func (d *Deployment) HandleUplinkEvent(ctx context.Context, pl integration.Uplin
 	if err := devEUI.UnmarshalText([]byte(pl.GetDeviceInfo().GetDevEui())); err != nil {
 		return err
 	}
+	log.Println("uplink event received for device:", devEUI)
 	_, found := d.opts.Devices[devEUI]
 
 	if uint8(pl.FPort) == multicastsetup.DefaultFPort && found {

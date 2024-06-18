@@ -166,7 +166,7 @@ func ReceiveWSMessageBinary() []byte {
 	if err != nil {
 		log.Fatal("Read error:", err)
 	}
-	log.Info("Websocket Message received: " + string(message))
+	log.Info("Websocket Message received: " + string(message)[:10])
 	return message
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 func main() {
@@ -21,7 +22,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	message := []byte("mgdevice,all,sysready")
+	message := []byte("mgmonitor,all,c2connect")
 	_, err = conn.Write(message)
 	if err != nil {
 		fmt.Println("Error sending message:", err)
@@ -29,6 +30,42 @@ func main() {
 	}
 
 	fmt.Println("Message sent:", string(message))
+
+	time.Sleep(3 * time.Second)
+
+	message = []byte("mgmonitor,all,appinit")
+	_, err = conn.Write(message)
+	if err != nil {
+		fmt.Println("Error sending message:", err)
+		return
+	}
+
+	fmt.Println("Message sent:", string(message))
+
+	time.Sleep(3 * time.Second)
+
+	message = []byte("mgmonitor,all,dbready")
+	_, err = conn.Write(message)
+	if err != nil {
+		fmt.Println("Error sending message:", err)
+		return
+	}
+
+	fmt.Println("Message sent:", string(message))
+
+	time.Sleep(3 * time.Second)
+
+	message = []byte("mgmonitor,all,sysready")
+	_, err = conn.Write(message)
+	if err != nil {
+		fmt.Println("Error sending message:", err)
+		return
+	}
+
+	fmt.Println("Message sent:", string(message))
+
+	time.Sleep(3 * time.Second)
+
 }
 
 // func main() {
