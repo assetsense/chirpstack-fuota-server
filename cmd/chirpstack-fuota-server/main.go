@@ -106,9 +106,9 @@ func main() {
 	// 	log.Println("Setting to previous state:", state)
 	// 	InitializeDB()
 	// }
-	ConnectToC2()
-	InitializeDB()
-	StartScheduler()
+	// ConnectToC2()
+	// InitializeDB()
+	// StartScheduler()
 
 	SendUdpMessage("mgfuota,all,started")
 	go ReceiveUdpMessages()

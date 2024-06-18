@@ -62,16 +62,23 @@ func consumeMessages(ch *amqp.Channel) (<-chan amqp.Delivery, error) {
 
 func (d *Deployment) processMessages(ctx context.Context, msgs <-chan amqp.Delivery) {
 	for msg := range msgs {
-		// log.Printf("Received a message: %s", msg.Body)
-		var uplinkEvent integration.UplinkEvent
-		if err := proto.Unmarshal(msg.Body, &uplinkEvent); err != nil {
-			log.Printf("Error decoding Protobuf message: %v", err)
-			continue
-		}
+		go d.processEachMessage(ctx, msg)
+	}
+}
 
-		if err := d.HandleUplinkEvent(ctx, uplinkEvent); err != nil {
-			log.Printf("Error handling uplink event: %v", err)
-		}
+func (d *Deployment) processEachMessage(ctx context.Context, msg amqp.Delivery) {
+	var uplinkEvent integration.UplinkEvent
+	if err := proto.Unmarshal(msg.Body, &uplinkEvent); err != nil {
+		log.Printf("Error decoding Protobuf message: %v", err)
+		return
+	}
+
+	// if err := json.Unmarshal(msg.Body, &uplinkEvent); err != nil {
+	// 	log.Printf("Error decoding uplink message: %v", err)
+	// }
+
+	if err := d.HandleUplinkEvent(ctx, uplinkEvent); err != nil {
+		log.Printf("Error handling uplink event: %v", err)
 	}
 }
 
