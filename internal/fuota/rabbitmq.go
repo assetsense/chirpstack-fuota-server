@@ -85,11 +85,9 @@ func (d *Deployment) processEachMessage(ctx context.Context, msg amqp.Delivery) 
 func (d *Deployment) ReceiveRabbitMq(ctx context.Context) {
 	conn, err := connect()
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
 
 	ch, err := createChannel(conn)
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
 
 	msgs, err := consumeMessages(ch)
 	failOnError(err, "Failed to register a consumer")

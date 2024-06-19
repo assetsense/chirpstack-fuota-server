@@ -12,7 +12,7 @@ import (
 
 var (
 	rabbitMQURL = "amqp://dev:dev123@localhost:5672/"
-	queueName   = "mg-data"
+	queueName   = "default"
 )
 
 func failOnError(err error, msg string) {
@@ -63,13 +63,18 @@ func consumeMessages(ch *amqp.Channel) (<-chan amqp.Delivery, error) {
 func processMessages(msgs <-chan amqp.Delivery) {
 	for msg := range msgs {
 		// log.Printf("Received a message: %s", msg.Body)
-		var uplinkEvent integration.UplinkEvent
-		if err := proto.Unmarshal(msg.Body, &uplinkEvent); err != nil {
-			log.Printf("Error decoding Protobuf message: %v", err)
-			continue
-		}
-		fmt.Println("\nval:", uplinkEvent)
+		go processEachMessage(msg)
+
 	}
+}
+
+func processEachMessage(msg amqp.Delivery) {
+	var uplinkEvent integration.UplinkEvent
+	if err := proto.Unmarshal(msg.Body, &uplinkEvent); err != nil {
+		log.Printf("Error decoding Protobuf message: %v", err)
+		return
+	}
+	fmt.Println("\nval:", uplinkEvent)
 }
 
 func main() {

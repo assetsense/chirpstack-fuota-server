@@ -296,8 +296,9 @@ func (d *Deployment) HandleUplinkEvent(ctx context.Context, pl integration.Uplin
 	if err := devEUI.UnmarshalText([]byte(pl.GetDeviceInfo().GetDevEui())); err != nil {
 		return err
 	}
-	log.Println("uplink event received for device:", devEUI)
-	_, found := d.opts.Devices[devEUI]
+	log.Println("uplink event received for device:", devEUI, " at fport:", pl.FPort)
+	// _, found := d.opts.Devices[devEUI]
+	found := true
 
 	if uint8(pl.FPort) == multicastsetup.DefaultFPort && found {
 		if err := d.handleMulticastSetupCommand(ctx, devEUI, pl.Data); err != nil {
