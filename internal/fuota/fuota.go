@@ -5,17 +5,24 @@ import (
 	"crypto/aes"
 	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gofrs/uuid"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/gorilla/websocket"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq/hstore"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 
 	"github.com/brocaar/lorawan"
+	"github.com/brocaar/lorawan/applayer/clocksync"
 	"github.com/brocaar/lorawan/applayer/fragmentation"
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	"github.com/brocaar/lorawan/gps"
@@ -24,6 +31,8 @@ import (
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/chirpstack/chirpstack/api/go/v4/common"
 	"github.com/chirpstack/chirpstack/api/go/v4/integration"
+
+	pb "github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota/proto"
 )
 
 // FragmentationSessionStatusRequestType type.
@@ -308,6 +317,16 @@ func (d *Deployment) HandleUplinkEvent(ctx context.Context, pl integration.Uplin
 		if err := d.handleFragmentationSessionSetupCommand(ctx, devEUI, pl.Data); err != nil {
 			return fmt.Errorf("handle fragmentation-session setup command error: %w", err)
 		}
+	} else if uint8(pl.FPort) == clocksync.DefaultFPort && found {
+		// Handle the clocksync in any case as it is requested by the device. Depending
+		// the device implementation, the request might be received even before the
+		// FUOTA deployment is created.
+		go func(pl integration.UplinkEvent) {
+			if err := handleClockSyncCommand(context.Background(), pl); err != nil {
+				log.WithError(err).Error("handle clocksync error")
+			}
+		}(pl)
+
 	} else {
 		log.WithFields(log.Fields{
 			"deployment_id": d.id,
@@ -695,6 +714,104 @@ func (d *Deployment) handleFragSessionStatusAns(ctx context.Context, devEUI lora
 		if done {
 			d.fragmentationSessionStatusDone <- struct{}{}
 		}
+	}
+
+	return nil
+}
+
+func handleClockSyncCommand(ctx context.Context, pl integration.UplinkEvent) error {
+	var devEUI lorawan.EUI64
+	if err := devEUI.UnmarshalText([]byte(pl.GetDeviceInfo().GetDevEui())); err != nil {
+		return err
+	}
+
+	// get uplink time
+	var timeSinceGPSEpoch time.Duration
+	var timeField time.Time
+	var err error
+
+	for _, rxInfo := range pl.RxInfo {
+		if rxInfo.TimeSinceGpsEpoch != nil {
+			timeSinceGPSEpoch, err = ptypes.Duration(rxInfo.TimeSinceGpsEpoch)
+			if err != nil {
+				log.WithError(err).Error("eventhandler: time since gps epoch to duration error")
+				continue
+			}
+		} else if rxInfo.Time != nil {
+			timeField, err = ptypes.Timestamp(rxInfo.Time)
+			if err != nil {
+				log.WithError(err).Error("eventhandler: time to timeestamp error")
+				continue
+			}
+		}
+	}
+
+	// fallback on time field when time since GPS epoch is not available
+	if timeSinceGPSEpoch == 0 {
+		// fallback on current server time when time field is not available
+		if timeField.IsZero() {
+			timeField = time.Now()
+		}
+		timeSinceGPSEpoch = gps.Time(timeField).TimeSinceGPSEpoch()
+	}
+
+	var cmd clocksync.Command
+	if err := cmd.UnmarshalBinary(true, pl.Data); err != nil {
+		return fmt.Errorf("unmarshal command error: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"dev_eui": devEUI,
+		"cid":     cmd.CID,
+	}).Info("eventhandler: clocksync command received")
+
+	switch cmd.CID {
+	case clocksync.AppTimeReq:
+		pl, ok := cmd.Payload.(*clocksync.AppTimeReqPayload)
+		if !ok {
+			return fmt.Errorf("expected *clocksync.AppTimeReqPayload expected, got: %T", cmd.Payload)
+		}
+		return handleClockSyncAppTimeReq(ctx, devEUI, timeSinceGPSEpoch, pl)
+	}
+
+	return nil
+}
+
+func handleClockSyncAppTimeReq(ctx context.Context, devEUI lorawan.EUI64, timeSinceGPSEpoch time.Duration, pl *clocksync.AppTimeReqPayload) error {
+	deviceGPSTime := int64(pl.DeviceTime)
+	networkGPSTime := int64((timeSinceGPSEpoch / time.Second) % (1 << 32))
+
+	log.WithFields(log.Fields{
+		"dev_eui":      devEUI,
+		"device_time":  pl.DeviceTime,
+		"ans_required": pl.Param.AnsRequired,
+		"token_req":    pl.Param.TokenReq,
+	}).Info("eventhandler: AppTimeReq received")
+
+	ans := clocksync.Command{
+		CID: clocksync.AppTimeAns,
+		Payload: &clocksync.AppTimeAnsPayload{
+			TimeCorrection: int32(networkGPSTime - deviceGPSTime),
+			Param: clocksync.AppTimeAnsPayloadParam{
+				TokenAns: pl.Param.TokenReq,
+			},
+		},
+	}
+	b, err := ans.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("marshal command error: %w", err)
+	}
+
+	// enqueue response
+	_, err = as.DeviceClient().Enqueue(ctx, &api.EnqueueDeviceQueueItemRequest{
+		QueueItem: &api.DeviceQueueItem{
+			DevEui: devEUI.String(),
+			FPort:  uint32(clocksync.DefaultFPort),
+			Data:   b,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("enqueue payload error: %w", err)
 	}
 
 	return nil
@@ -1468,4 +1585,105 @@ devLoop:
 	}
 
 	return nil
+}
+
+func (d *Deployment) handleFuotaUpdate(ctx context.Context, pl integration.UplinkEvent) error {
+	var devEUI lorawan.EUI64
+	if err := devEUI.UnmarshalText([]byte(pl.GetDeviceInfo().GetDevEui())); err != nil {
+		return err
+	}
+
+	fuotaUpdate := &pb.FuotaUpdate{
+		DeviceCode:      "device123",
+		Timestamp:       time.Now().Unix(),
+		FirmwareUpdated: "v1.2.3",
+		Success:         true,
+	}
+
+	// Marshal the FuotaUpdate message to bytes
+	fuotaUpdateBytes, err := proto.Marshal(fuotaUpdate)
+	if err != nil {
+		log.Fatalf("Failed to marshal FuotaUpdate message: %v", err)
+	}
+
+	// Create the UniversalProto message and set its fields
+	universalProto := &pb.UniversalProto{
+		Id:      7202,
+		Payload: fuotaUpdateBytes,
+	}
+
+	// Marshal the UniversalProto message to bytes
+	universalProtoBytes, err := proto.Marshal(universalProto)
+	if err != nil {
+		log.Fatalf("Failed to marshal UniversalProto message: %v", err)
+	}
+
+	var c2config C2Config = getC2ConfigFromToml()
+	// Establish a WebSocket connection
+	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+
+	// Device authentication
+	websocketURL := c2config.ServerURL + encodedAuth + "/true"
+	headers := make(http.Header)
+	headers.Set("Device", "Basic "+encodedAuth)
+	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
+	if err != nil {
+		log.Fatalf("Failed to connect to WebSocket: %v", err)
+	}
+	defer conn.Close()
+
+	// Send the UniversalProto message over the WebSocket
+	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
+	if err != nil {
+		log.Fatalf("Failed to send message over WebSocket: %v", err)
+	}
+
+	log.Println("Message sent successfully")
+
+	return nil
+}
+
+func getC2ConfigFromToml() C2Config {
+
+	viper.SetConfigName("c2intbootconfig")
+	viper.SetConfigType("toml")
+	viper.AddConfigPath("/usr/local/bin")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Fatalf("c2intbootconfig.toml file not found: %v", err)
+		} else {
+			log.Fatalf("Error reading c2intbootconfig.toml file: %v", err)
+		}
+	}
+
+	var c2config C2Config
+
+	c2config.Username = viper.GetString("c2App.username")
+	if c2config.Username == "" {
+		log.Fatal("username not found in c2intbootconfig.toml file")
+	}
+
+	c2config.Password = viper.GetString("c2App.password")
+	if c2config.Password == "" {
+		log.Fatal("password not found in c2intbootconfig.toml file")
+	}
+
+	c2config.ServerURL = viper.GetString("c2App.serverUrl")
+	if c2config.ServerURL == "" {
+		log.Fatal("serverUrl not found in c2intbootconfig.toml file")
+	}
+
+	c2config.Frequency = viper.GetString("c2App.frequency")
+
+	return c2config
+}
+
+type C2Config struct {
+	ServerURL    string
+	Username     string
+	Password     string
+	Frequency    string
+	LastSyncTime string
 }

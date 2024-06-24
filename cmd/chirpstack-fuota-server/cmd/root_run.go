@@ -67,6 +67,7 @@ func setupStorage() error {
 }
 
 func setupEventHandler() error {
+	return nil
 	if err := eventhandler.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup event-handler error: %w", err)
 		// return err
