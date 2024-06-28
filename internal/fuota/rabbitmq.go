@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	rabbitMQURL = "amqp://" + C2config.RabbitMQUsername + ":" + C2config.RabbitMQPassword + "@" + C2config.RabbitMQHost + ":" + C2config.RabbitMQPort + "/"
-	queueName   = "mgfuota"
+	rabbitMQURL  = "amqp://" + C2config.RabbitMQUsername + ":" + C2config.RabbitMQPassword + "@" + C2config.RabbitMQHost + ":" + C2config.RabbitMQPort + "/"
+	queueName    = "mgfuota"
+	exchangeName = "amq.topic"
 )
 
 func failOnError(err error, msg string) {
@@ -82,12 +83,40 @@ func (d *Deployment) processEachMessage(ctx context.Context, msg amqp.Delivery) 
 	}
 }
 
+func createQueue(ch *amqp.Channel) {
+	q, err := ch.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+	// fmt.Println("queue created")
+
+	routingKeys := []string{"200", "201", "202"}
+	for _, routingkey := range routingKeys {
+		err = ch.QueueBind(
+			q.Name,       // queue name
+			routingkey,   // routing key
+			exchangeName, // exchange
+			false,
+			nil,
+		)
+		failOnError(err, "Failed to bind a queue")
+	}
+	// fmt.Println("queue binded")
+}
+
 func (d *Deployment) ReceiveRabbitMq(ctx context.Context) {
 	conn, err := connect()
 	failOnError(err, "Failed to connect to RabbitMQ")
 
 	ch, err := createChannel(conn)
 	failOnError(err, "Failed to open a channel")
+
+	createQueue(ch)
 
 	msgs, err := consumeMessages(ch)
 	failOnError(err, "Failed to register a consumer")

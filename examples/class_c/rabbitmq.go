@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	rabbitMQURL = "amqp://dev:dev123@localhost:5672/"
-	queueName   = "default"
+	rabbitMQURL  = "amqp://dev:dev123@localhost:5672/"
+	queueName    = "mgfuota"
+	exchangeName = "amq.topic"
 )
 
 func failOnError(err error, msg string) {
@@ -77,6 +78,32 @@ func processEachMessage(msg amqp.Delivery) {
 	fmt.Println("\nval:", uplinkEvent)
 }
 
+func createQueue(ch *amqp.Channel) {
+	q, err := ch.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	failOnError(err, "Failed to declare a queue")
+	fmt.Println("queue created")
+
+	routingKeys := []string{"200", "201", "202"}
+	for _, routingkey := range routingKeys {
+		err = ch.QueueBind(
+			q.Name,       // queue name
+			routingkey,   // routing key
+			exchangeName, // exchange
+			false,
+			nil,
+		)
+		failOnError(err, "Failed to bind a queue")
+	}
+	fmt.Println("queue binded")
+}
+
 func main() {
 	conn, err := connect()
 	failOnError(err, "Failed to connect to RabbitMQ")
@@ -85,6 +112,8 @@ func main() {
 	ch, err := createChannel(conn)
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
+
+	createQueue(ch)
 
 	msgs, err := consumeMessages(ch)
 	failOnError(err, "Failed to register a consumer")
