@@ -9,6 +9,7 @@ import (
 
 	"github.com/brocaar/lorawan"
 	fapi "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
+
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 	"github.com/chirpstack/chirpstack/api/go/v4/api"

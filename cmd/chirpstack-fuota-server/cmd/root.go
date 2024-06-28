@@ -25,6 +25,8 @@ type C2Config struct {
 	ChirpstackToken string
 	DbUsername      string
 	DbName          string
+	DbHost          string
+	DbPort          string
 }
 
 var (
@@ -50,7 +52,7 @@ func init() {
 
 	// default values
 	// viper.SetDefault("postgresql.dsn", "postgres://localhost/chirpstack_fuota?sslmode=disable")
-	viper.SetDefault("postgresql.dsn", "postgres://"+c2config.DbUsername+":"+c2config.Password+"@"+c2config.ChirpstackHost+"/"+c2config.DbName+"?sslmode=disable")
+	viper.SetDefault("postgresql.dsn", "postgres://"+c2config.DbUsername+":"+c2config.Password+"@"+c2config.DbHost+"/"+c2config.DbName+"?sslmode=disable")
 	viper.SetDefault("postgresql.automigrate", true)
 	viper.SetDefault("postgresql.max_idle_connections", 2)
 
@@ -213,6 +215,16 @@ func getC2ConfigFromToml() C2Config {
 	c2config.DbUsername = viper.GetString("database.username")
 	if c2config.Username == "" {
 		log.Fatal("dbusername not found in c2intbootconfig.toml file")
+	}
+
+	c2config.DbHost = viper.GetString("database.host")
+	if c2config.DbHost == "" {
+		log.Fatal("dbhost not found in c2intbootconfig.toml file")
+	}
+
+	c2config.DbPort = viper.GetString("database.port")
+	if c2config.DbPort == "" {
+		log.Fatal("dbport not found in c2intbootconfig.toml file")
 	}
 
 	c2config.DbName = viper.GetString("database.dbname")

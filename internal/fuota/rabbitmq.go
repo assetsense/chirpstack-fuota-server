@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	rabbitMQURL = "amqp://dev:dev123@localhost:5672/"
-	queueName   = "default"
+	rabbitMQURL = "amqp://" + C2config.RabbitMQUsername + ":" + C2config.RabbitMQPassword + "@" + C2config.RabbitMQHost + ":" + C2config.RabbitMQPort + "/"
+	queueName   = "mgfuota"
 )
 
 func failOnError(err error, msg string) {

@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/gofrs/uuid"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"
 
@@ -25,6 +26,8 @@ import (
 	fuota "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 	"github.com/jmoiron/sqlx"
+
+	pb "github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota/proto"
 )
 
 // type Config struct {
@@ -197,14 +200,122 @@ func Scheduler() {
 
 	defer ticker.Stop()
 
+	retryTicker := time.NewTicker(time.Duration(frequency/4) * time.Minute)
+
+	defer retryTicker.Stop()
+
 	SendUdpMessage("mgfuota,all,sysreadysuccess")
 	CheckForFirmwareUpdate()
+
+	retries := 1
 	for {
 		select {
 		case <-ticker.C:
+			retries = 1
 			CheckForFirmwareUpdate()
+		case <-retryTicker.C:
+			if retries > 0 {
+				retries--
+				CheckForFirmwareUpdate()
+			} else if retries == 0 {
+				retries--
+				SendFailedDevicesStatus()
+			}
 		}
 	}
+}
+
+func SendFailedDevicesStatus() {
+	// log.Info("Checking for firmware updates")
+	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
+	SendWSMessage("{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}")
+
+	//Respose format - {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{"modelId":1234, \"version\":\"1.0.1\"}]}]};
+	// response := ReceiveMessageDummyForModels()
+	message := ReceiveWSMessage()
+
+	var response FirmwareUpdateResponse
+	err := json.Unmarshal([]byte(message), &response)
+	if err != nil {
+		log.Fatalf("Error unmarshalling FirmwareUpdateResponse: %v", err)
+	}
+
+	for _, model := range response.Models {
+		// fmt.Printf("Model ID: %d, Version: %s\n", model.ModelId, model.Version)
+
+		if err := storage.Transaction(func(tx sqlx.Ext) error {
+			var devices []storage.Device
+			devices, err := storage.GetDevicesByModelAndVersion(context.Background(), tx, model.ModelId, model.Version)
+			if err != nil {
+				return fmt.Errorf("GetDevicesByModelAndVersion error: %w", err)
+			}
+			if len(devices) == 0 {
+				// log.Info("No Active devices in DB of Model Id:", model.ModelId, " and Version <", model.Version)
+				return nil
+			} else {
+				for _, device := range devices {
+					SendFailedDevicesStatusToC2(device.DeviceCode, device.FirmwareVersion, model.Version)
+				}
+
+			}
+
+			return nil
+		}); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelVersion string) {
+
+	fuotaUpdate := &pb.FuotaUpdate{
+		DeviceCode:      deviceCode,
+		Timestamp:       time.Now().Unix(),
+		FirmwareUpdated: modelVersion,
+		Success:         false,
+	}
+
+	// Marshal the FuotaUpdate message to bytes
+	fuotaUpdateBytes, err := proto.Marshal(fuotaUpdate)
+	if err != nil {
+		log.Fatalf("Failed to marshal FuotaUpdate message: %v", err)
+	}
+
+	// Create the UniversalProto message and set its fields
+	universalProto := &pb.UniversalProto{
+		Id:      7202,
+		Payload: fuotaUpdateBytes,
+	}
+
+	// Marshal the UniversalProto message to bytes
+	universalProtoBytes, err := proto.Marshal(universalProto)
+	if err != nil {
+		log.Fatalf("Failed to marshal UniversalProto message: %v", err)
+	}
+
+	var c2config C2Config = getC2ConfigFromToml()
+	// Establish a WebSocket connection
+	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+
+	// Device authentication
+	websocketURL := c2config.ServerURL + encodedAuth + "/true"
+	headers := make(http.Header)
+	headers.Set("Device", "Basic "+encodedAuth)
+	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
+	if err != nil {
+		log.Fatalf("Failed to connect to WebSocket: %v", err)
+	}
+	defer conn.Close()
+
+	// Send the UniversalProto message over the WebSocket
+	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
+	if err != nil {
+		log.Fatalf("Failed to send message over WebSocket: %v", err)
+	}
+
+	log.Println("Device firmware update failed message sent to C2 for device:", deviceCode)
+
 }
 
 func ParseFrequency(frequency string) (int, error) {
