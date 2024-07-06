@@ -1446,6 +1446,7 @@ func (d *Deployment) stepEnqueue(ctx context.Context) error {
 				Data:             b,
 			},
 		})
+		log.Println("Enqueue:", hex.EncodeToString(b))
 	}
 
 	sd, err := storage.GetDeployment(ctx, storage.DB(), d.GetID())
