@@ -425,26 +425,6 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 	client := fuota.NewFuotaServerServiceClient(GrpcConn)
 
 	resp, err := client.CreateDeployment(context.Background(), &fuota.CreateDeploymentRequest{
-		// Deployment: &fuota.Deployment{
-		// 	ApplicationId:                     applicationId,
-		// 	Devices:                           GetDeploymentDevices(mcRootKey, devices),
-		// 	MulticastGroupType:                fuota.MulticastGroupType_CLASS_C,
-		// 	MulticastDr:                       5,
-		// 	MulticastFrequency:                868100000,
-		// 	MulticastGroupId:                  0,
-		// 	MulticastTimeout:                  6,
-		// 	MulticastRegion:                   regions[region],
-		// 	UnicastTimeout:                    ptypes.DurationProto(60 * time.Second),
-		// 	UnicastAttemptCount:               1,
-		// 	FragmentationFragmentSize:         50,
-		// 	Payload:                           payload,
-		// 	FragmentationRedundancy:           1,
-		// 	FragmentationSessionIndex:         0,
-		// 	FragmentationMatrix:               0,
-		// 	FragmentationBlockAckDelay:        1,
-		// 	FragmentationDescriptor:           []byte{0, 0, 0, 0},
-		// 	RequestFragmentationSessionStatus: fuota.RequestFragmentationSessionStatus_AFTER_SESSION_TIMEOUT,
-		// },
 		Deployment: &fuota.Deployment{
 			ApplicationId:                     applicationId,
 			Devices:                           GetDeploymentDevices(mcRootKey, devices),

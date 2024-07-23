@@ -1405,13 +1405,26 @@ func (d *Deployment) stepEnqueue(ctx context.Context) error {
 		}).Info("fuota: waiting with enqueue until multicast-session starts")
 		time.Sleep(timeDiff)
 	}
-
+	//changes advised by ravindra
+	fragsize := 220
+	Redundancy_per := 10
+	Redundancy_padd := Redundancy_per * fragsize
 	// fragment the payload
-	padding := (d.opts.FragSize - (len(d.opts.Payload) % d.opts.FragSize)) % d.opts.FragSize
-	fragments, err := fragmentation.Encode(append(d.opts.Payload, make([]byte, padding)...), d.opts.FragSize, d.opts.Redundancy)
+	padding_len := Redundancy_padd - (len(d.opts.Payload) % Redundancy_padd)
+	padding := padding_len
+	fdata := append(d.opts.Payload, make([]byte, padding)...)
+
+	d.opts.Redundancy = len(d.opts.Payload) / d.opts.FragSize
+	d.opts.Redundancy = d.opts.Redundancy / Redundancy_per
+	d.opts.Redundancy++
+
+	// padding := (d.opts.FragSize - (len(d.opts.Payload) % d.opts.FragSize)) % d.opts.FragSize
+	fragments, err := fragmentation.Encode(fdata, d.opts.FragSize, d.opts.Redundancy)
 	if err != nil {
 		return fmt.Errorf("fragment payload error: %w", err)
 	}
+
+	log.Println(fdata)
 
 	// wrap the payloads into data-fragment payloads
 	var payloads [][]byte
