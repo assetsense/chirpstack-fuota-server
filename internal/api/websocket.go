@@ -281,10 +281,13 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 		log.Fatalf("Failed to marshal FuotaUpdate message: %v", err)
 	}
 
+	typeArr := [1]int32{7202}
+	fuotaUpdateBytesArr := [1][]byte{fuotaUpdateBytes}
+
 	// Create the UniversalProto message and set its fields
-	universalProto := &pb.UniversalProto{
-		Id:      7202,
-		Payload: fuotaUpdateBytes,
+	universalProto := &pb.Universal{
+		Type:     typeArr[:],
+		Messages: fuotaUpdateBytesArr[:],
 	}
 
 	// Marshal the UniversalProto message to bytes
@@ -400,7 +403,7 @@ func handleMessage(message string) {
 					log.Fatal(err)
 				}
 			}
-			var payload []byte = getFirmwarePayload(model.ModelId, model.Version)
+			var payload []byte = GetFirmwarePayload(model.ModelId, model.Version)
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
 				go createDeploymentRequest(model.Version, devices, applicationId, region, payload)
@@ -497,7 +500,7 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 	return deploymentDevices
 }
 
-func getFirmwarePayload(modelId int, version string) []byte {
+func GetFirmwarePayload(modelId int, version string) []byte {
 	log.Info("Getting firmware file for Model Id:", modelId, "and Version:", version)
 	//Request format - {“msg_type”:”FIRMWARE_FILE”, “filter”:{\”models\”:[\”modelId\”: 1234, \”version\”:”1.0.1”, \”latestVersion\”:false]}}
 	request := fmt.Sprintf(`{"msg_type":"FIRMWARE_FILE", "filter":"{\"models\":[{\"modelId\": %d, \"version\": \"%s\", \"latestVersion\": false}]}"}`, modelId, version)
@@ -515,8 +518,24 @@ func getFirmwarePayload(modelId int, version string) []byte {
 	// if err != nil {
 	// 	log.Error("Error decoding Base64 firmware string:", err)
 	// }
-	firmwareBytes := ReceiveWSMessageBinary()
-	return firmwareBytes
+	responseBytes := ReceiveWSMessageBinary()
+
+	var universal pb.Universal
+	err := proto.Unmarshal(responseBytes, &universal)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal Universal message for FirmwareFileResponse: %v", err)
+	}
+
+	// fmt.Println(universal.Type)
+	// fmt.Println(universal.Messages)
+	var firmwareFileResponse pb.FirmwareFileResponse
+	err = proto.Unmarshal(universal.Messages[0], &firmwareFileResponse)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal FirmwareFileResponse message: %v", err)
+	}
+	// fmt.Println(firmwareFileResponse.ModelId)
+	// fmt.Println(firmwareFileResponse.Version)
+	return firmwareFileResponse.Firmware
 }
 
 func getC2ConfigFromToml() C2Config {

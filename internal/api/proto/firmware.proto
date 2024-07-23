@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package fuotaupdate;
+
+option go_package = "github.com/chirpstack/chirpstack-fuota-server/v4/api/go";
+
+message Universal {
+    repeated int32 type = 1;
+    repeated bytes messages = 2;
+}
+
+message FirmwareFileResponse {
+    int64 modelId = 1;
+    string version = 2;
+    bytes firmware = 3;
+}

@@ -306,8 +306,7 @@ func (d *Deployment) HandleUplinkEvent(ctx context.Context, pl integration.Uplin
 		return err
 	}
 	log.Println("uplink event received for device:", devEUI, " at fport:", pl.FPort)
-	// _, found := d.opts.Devices[devEUI]
-	found := true
+	_, found := d.opts.Devices[devEUI]
 
 	if uint8(pl.FPort) == multicastsetup.DefaultFPort && found {
 		if err := d.handleMulticastSetupCommand(ctx, devEUI, pl.Data); err != nil {
@@ -1611,10 +1610,13 @@ func (d *Deployment) handleFuotaUpdate(ctx context.Context, pl integration.Uplin
 		log.Fatalf("Failed to marshal FuotaUpdate message: %v", err)
 	}
 
+	typeArr := [1]int32{7202}
+	fuotaUpdateBytesArr := [1][]byte{fuotaUpdateBytes}
+
 	// Create the UniversalProto message and set its fields
-	universalProto := &pb.UniversalProto{
-		Id:      7202,
-		Payload: fuotaUpdateBytes,
+	universalProto := &pb.Universal{
+		Type:     typeArr[:],
+		Messages: fuotaUpdateBytesArr[:],
 	}
 
 	// Marshal the UniversalProto message to bytes

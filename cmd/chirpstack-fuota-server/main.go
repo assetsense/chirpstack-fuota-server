@@ -88,6 +88,20 @@ var version string // set by the compiler
 
 var state int = 0
 
+// func main() {
+// 	ConnectToC2()
+// 	var payload []byte = api.GetFirmwarePayload(7, "1.0.10")
+// 	// fmt.Println(payload[:10])
+// 	cnt := 0
+// 	for _, i := range payload {
+// 		fmt.Printf("%02x ", i)
+// 		cnt++
+// 		if cnt > 50 {
+// 			break
+// 		}
+// 	}
+// }
+
 func main() {
 	logFile, err := os.OpenFile("mg_fuota.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
@@ -98,6 +112,10 @@ func main() {
 	// multiWriter := io.MultiWriter(os.Stdout, logFile)
 	multiWriter := io.MultiWriter(os.Stdout)
 	log.SetOutput(multiWriter)
+
+	// ConnectToC2()
+	// StartScheduler()
+	// return
 
 	InitUdpConnection()
 	// state := api.LoadState()
