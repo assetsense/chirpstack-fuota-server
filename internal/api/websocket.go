@@ -416,7 +416,9 @@ func handleMessage(message string) {
 }
 
 func createDeploymentRequest(firmwareVersion string, devices []storage.Device, applicationId string, region string, payload []byte) {
-	mcRootKey, err := multicastsetup.GetMcRootKeyForGenAppKey(lorawan.AES128Key{0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+
+	// mcRootKey, err := multicastsetup.GetMcRootKeyForGenAppKey(lorawan.AES128Key{0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	mcRootKey, err := multicastsetup.GetMcRootKeyForGenAppKey(lorawan.AES128Key{0x45, 0xf9, 0xcd, 0x9d, 0xdc, 0xa0, 0x27, 0xb6, 0xf0, 0x34, 0xa2, 0xdc, 0xa4, 0x27, 0xe1, 0xf0})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -438,10 +440,10 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 			ApplicationId:                     applicationId,
 			Devices:                           GetDeploymentDevices(mcRootKey, devices),
 			MulticastGroupType:                fuota.MulticastGroupType_CLASS_C,
-			MulticastDr:                       3, // Data Rate for US915, typically DR3 for Class C
+			MulticastDr:                       12, // DR12
 			MulticastFrequency:                923300000,
 			MulticastGroupId:                  0,
-			MulticastTimeout:                  600, // 10 minutes to spread out transmissions
+			MulticastTimeout:                  12, // 2^n seconds
 			MulticastRegion:                   regions[region],
 			UnicastTimeout:                    ptypes.DurationProto(60 * time.Second),
 			UnicastAttemptCount:               5,
@@ -450,7 +452,7 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 			FragmentationRedundancy:           redundancy,
 			FragmentationSessionIndex:         0,
 			FragmentationMatrix:               0,
-			FragmentationBlockAckDelay:        9000, // 9 seconds
+			FragmentationBlockAckDelay:        300,
 			FragmentationDescriptor:           []byte{0, 0, 0, 0},
 			RequestFragmentationSessionStatus: fuota.RequestFragmentationSessionStatus_AFTER_SESSION_TIMEOUT,
 		},
