@@ -428,9 +428,20 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 	const fragsize uint32 = 220
 	const redundancy_per uint32 = 10
 
-	var redundancy uint32 = uint32(len(payload)) / fragsize
-	redundancy = redundancy / redundancy_per
+	var redundancy_padd uint32 = redundancy_per * fragsize
+
+	padding := redundancy_padd - (uint32(len(payload)) % redundancy_padd)
+	fdata := append(payload, make([]byte, padding)...)
+
+	var redundancy uint32 = uint32(len(fdata)) / (fragsize * redundancy_per)
 	redundancy++
+	var pay_ld_len uint32 = uint32(len(fdata))
+	fmt.Println("// data length : ", pay_ld_len)
+	fmt.Println("// fragSize = ", fragsize)
+	fmt.Println("// fragNb = ", pay_ld_len/fragsize)
+	fmt.Println("// Redundancy = ", redundancy)
+	//fragment the payload
+
 	/**************************************************************/
 
 	client := fuota.NewFuotaServerServiceClient(GrpcConn)
