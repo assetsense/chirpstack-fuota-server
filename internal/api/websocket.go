@@ -422,6 +422,15 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 	}
 	log.Info("Creating deployement request for Region:", region, " FirmwareVersion:", firmwareVersion)
 
+	/****************changes advised by ravindra*******************/
+	const fragsize uint32 = 220
+	const redundancy_per uint32 = 10
+
+	var redundancy uint32 = uint32(len(payload)) / fragsize
+	redundancy = redundancy / redundancy_per
+	redundancy++
+	/**************************************************************/
+
 	client := fuota.NewFuotaServerServiceClient(GrpcConn)
 
 	resp, err := client.CreateDeployment(context.Background(), &fuota.CreateDeploymentRequest{
@@ -436,9 +445,9 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 			MulticastRegion:                   regions[region],
 			UnicastTimeout:                    ptypes.DurationProto(60 * time.Second),
 			UnicastAttemptCount:               5,
-			FragmentationFragmentSize:         50,
+			FragmentationFragmentSize:         fragsize,
 			Payload:                           payload,
-			FragmentationRedundancy:           1,
+			FragmentationRedundancy:           redundancy,
 			FragmentationSessionIndex:         0,
 			FragmentationMatrix:               0,
 			FragmentationBlockAckDelay:        9000, // 9 seconds
