@@ -46,6 +46,8 @@ CREATE TABLE chirpstack.device (
     profileId BIGINT,
     firmwareVersion VARCHAR(255),
     status BIGINT,
+    firmwareUpdateFailed BOOLEAN,
+    attempts BIGINT,
     CONSTRAINT fk_device_profile FOREIGN KEY (profileId) REFERENCES chirpstack.device_profile(profileId)
 );
 

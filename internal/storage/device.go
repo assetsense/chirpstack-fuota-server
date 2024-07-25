@@ -34,7 +34,7 @@ func GetDevicesByModelAndVersion(ctx context.Context, db sqlx.Queryer, modelId i
 	query := `
 		SELECT devicecode, modelid, profileid, firmwareversion, status
 		FROM chirpstack.device
-		WHERE modelid = $1 and status = 4270
+		WHERE modelid = $1 and status = 4270 and firmwareUpdateFailed = False and attempts < 3
 	`
 	if err := sqlx.Select(db, &devices, query, modelId); err != nil {
 		return nil, fmt.Errorf("sql select error: %w", err)
@@ -108,6 +108,78 @@ func UpdateDeviceStatus(ctx context.Context, db sqlx.Execer, deviceCode string, 
 		"deviceCode": deviceCode,
 		"status":     status,
 	}).Info("storage: device status updated")
+
+	return nil
+}
+
+func GetDeviceFirmwareUpdateFailed(ctx context.Context, db sqlx.Queryer, deviceCode string) (bool, error) {
+
+	var failed bool
+	query := `
+		SELECT region
+		FROM chirpstack.device_profile
+		WHERE deviceCode = $1
+	`
+	err := sqlx.Get(db, &failed, query, deviceCode)
+	if err != nil {
+		return failed, fmt.Errorf("sql select error: %w", err)
+	}
+
+	return failed, nil
+}
+
+func UpdateDeviceFirmwareUpdateFailedToTrue(ctx context.Context, db sqlx.Execer, deviceCode string) error {
+
+	res, err := db.Exec(`
+		update chirpstack.device set
+			firmwareUpdateFailed = True, attempts = 0
+		where
+			deviceCode = $1 and attempts >= 2`,
+		deviceCode,
+	)
+	if err != nil {
+		return fmt.Errorf("sql update error: %w", err)
+	}
+	ra, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected error: %w", err)
+	}
+	if ra == 0 {
+		return ErrDoesNotExist
+	}
+
+	log.WithFields(log.Fields{
+		"deviceCode": deviceCode,
+	}).Info("storage: device FirmwareUpdateFailed set to True")
+
+	return nil
+}
+
+func IncrementDeviceAttempt(ctx context.Context, db sqlx.Execer, deviceCode string) error {
+
+	res, err := db.Exec(`
+		update chirpstack.device set
+			attempt = attempt + 1,
+		where
+			deviceCode = $1 and firmwareUpdateFailed = False`,
+		deviceCode,
+	)
+	if err != nil {
+		return fmt.Errorf("sql update error: %w", err)
+	}
+	ra, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected error: %w", err)
+	}
+	if ra == 0 {
+		return ErrDoesNotExist
+	}
+
+	UpdateDeviceFirmwareUpdateFailedToTrue(ctx, db, deviceCode)
+
+	log.WithFields(log.Fields{
+		"deviceCode": deviceCode,
+	}).Info("storage: device attempts incremented")
 
 	return nil
 }

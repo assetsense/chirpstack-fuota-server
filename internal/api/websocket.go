@@ -219,7 +219,7 @@ func Scheduler() {
 				CheckForFirmwareUpdate()
 			} else if retries == 0 {
 				retries--
-				SendFailedDevicesStatus()
+				// SendFailedDevicesStatus()
 			}
 		}
 	}
@@ -296,23 +296,23 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 		log.Fatalf("Failed to marshal UniversalProto message: %v", err)
 	}
 
-	var c2config C2Config = getC2ConfigFromToml()
-	// Establish a WebSocket connection
-	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
-	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+	// var c2config C2Config = getC2ConfigFromToml()
+	// // Establish a WebSocket connection
+	// authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	// encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
-	// Device authentication
-	websocketURL := c2config.ServerURL + encodedAuth + "/true"
-	headers := make(http.Header)
-	headers.Set("Device", "Basic "+encodedAuth)
-	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
-	if err != nil {
-		log.Fatalf("Failed to connect to WebSocket: %v", err)
-	}
-	defer conn.Close()
+	// // Device authentication
+	// websocketURL := c2config.ServerURL + encodedAuth + "/true"
+	// headers := make(http.Header)
+	// headers.Set("Device", "Basic "+encodedAuth)
+	// conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
+	// if err != nil {
+	// 	log.Fatalf("Failed to connect to WebSocket: %v", err)
+	// }
+	// defer conn.Close()
 
 	// Send the UniversalProto message over the WebSocket
-	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
+	err = WSConn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
 	if err != nil {
 		log.Fatalf("Failed to send message over WebSocket: %v", err)
 	}
@@ -392,12 +392,24 @@ func handleMessage(message string) {
 			// Separate devices based on region and store in the map
 			for _, device := range devices {
 				if err := storage.Transaction(func(tx sqlx.Ext) error {
-					var region string
-					region, err := storage.GetRegionByDeviceCode(context.Background(), tx, device.DeviceCode)
-					if err != nil {
+					errr := storage.IncrementDeviceAttempt(context.Background(), tx, device.DeviceCode)
+					if errr != nil {
+						return fmt.Errorf("IncrementDeviceAttempt error: %w", err)
+					}
+
+					failed, errrr := storage.GetDeviceFirmwareUpdateFailed(context.Background(), tx, device.DeviceCode)
+					if errrr != nil {
 						return fmt.Errorf("GetRegionByDeviceId error: %w", err)
 					}
-					deviceMap[region] = append(deviceMap[region], device)
+					if failed == false {
+						region, err := storage.GetRegionByDeviceCode(context.Background(), tx, device.DeviceCode)
+						if err != nil {
+							return fmt.Errorf("GetRegionByDeviceId error: %w", err)
+						}
+						deviceMap[region] = append(deviceMap[region], device)
+					} else {
+						SendFailedDevicesStatusToC2(device.DeviceCode, device.FirmwareVersion, model.Version)
+					}
 					return nil
 				}); err != nil {
 					log.Fatal(err)
@@ -459,7 +471,7 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 			UnicastTimeout:                    ptypes.DurationProto(60 * time.Second),
 			UnicastAttemptCount:               5,
 			FragmentationFragmentSize:         fragsize,
-			Payload:                           payload,
+			Payload:                           fdata,
 			FragmentationRedundancy:           redundancy,
 			FragmentationSessionIndex:         0,
 			FragmentationMatrix:               0,
