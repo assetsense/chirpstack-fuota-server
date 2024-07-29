@@ -394,12 +394,12 @@ func handleMessage(message string) {
 				if err := storage.Transaction(func(tx sqlx.Ext) error {
 					errr := storage.IncrementDeviceAttempt(context.Background(), tx, device.DeviceCode)
 					if errr != nil {
-						return fmt.Errorf("IncrementDeviceAttempt error: %w", err)
+						return fmt.Errorf("IncrementDeviceAttempt error: %w", errr)
 					}
 
 					failed, errrr := storage.GetDeviceFirmwareUpdateFailed(context.Background(), tx, device.DeviceCode)
 					if errrr != nil {
-						return fmt.Errorf("GetRegionByDeviceId error: %w", err)
+						return fmt.Errorf("GetDeviceFirmwareUpdateFailed error: %w", errrr)
 					}
 					if failed == false {
 						region, err := storage.GetRegionByDeviceCode(context.Background(), tx, device.DeviceCode)

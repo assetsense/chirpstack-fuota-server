@@ -116,8 +116,8 @@ func GetDeviceFirmwareUpdateFailed(ctx context.Context, db sqlx.Queryer, deviceC
 
 	var failed bool
 	query := `
-		SELECT region
-		FROM chirpstack.device_profile
+		SELECT firmwareUpdateFailed
+		FROM chirpstack.device
 		WHERE deviceCode = $1
 	`
 	err := sqlx.Get(db, &failed, query, deviceCode)
@@ -159,7 +159,7 @@ func IncrementDeviceAttempt(ctx context.Context, db sqlx.Execer, deviceCode stri
 
 	res, err := db.Exec(`
 		update chirpstack.device set
-			attempt = attempt + 1,
+			attempts = attempts + 1
 		where
 			deviceCode = $1 and firmwareUpdateFailed = False`,
 		deviceCode,
