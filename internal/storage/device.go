@@ -134,7 +134,7 @@ func UpdateDeviceFirmwareUpdateFailedToTrue(ctx context.Context, db sqlx.Execer,
 		update chirpstack.device set
 			firmwareUpdateFailed = True, attempts = 0
 		where
-			deviceCode = $1 and attempts >= 2`,
+			deviceCode = $1 and attempts > 2`,
 		deviceCode,
 	)
 	if err != nil {

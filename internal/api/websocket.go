@@ -207,11 +207,11 @@ func Scheduler() {
 	SendUdpMessage("mgfuota,all,sysreadysuccess")
 	CheckForFirmwareUpdate()
 
-	retries := 1
+	retries := 2
 	for {
 		select {
 		case <-ticker.C:
-			retries = 1
+			retries = 2
 			CheckForFirmwareUpdate()
 		case <-retryTicker.C:
 			if retries > 0 {
