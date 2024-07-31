@@ -29,7 +29,7 @@ type TagDetail struct {
 	TagDesc string `json:"tagDesc"`
 }
 
-var channelName string = "Channel100k"
+var channelName string = "Channel5k"
 
 func main() {
 	CreatChannel()
@@ -37,7 +37,7 @@ func main() {
 }
 
 func GetTagsFromC2WS() {
-	username := "saikiran.o2testing"
+	username := "saikiran.o2"
 	password := "HydeVil#71"
 
 	//creating authentication string

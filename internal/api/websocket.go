@@ -297,24 +297,24 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 	}
 
 	// var c2config C2Config = getC2ConfigFromToml()
-	// // Establish a WebSocket connection
-	// authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
-	// encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+	// Establish a WebSocket connection
+	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
-	// // Device authentication
-	// websocketURL := c2config.ServerURL + encodedAuth + "/true"
-	// headers := make(http.Header)
-	// headers.Set("Device", "Basic "+encodedAuth)
-	// conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to WebSocket: %v", err)
-	// }
-	// defer conn.Close()
+	// Device authentication
+	websocketURL := c2config.ServerURL + encodedAuth + "/true/proto"
+	headers := make(http.Header)
+	headers.Set("Device", "Basic "+encodedAuth)
+	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
+	if err != nil {
+		log.Fatalf("Failed to connect to WebSocket /proto: %v", err)
+	}
+	defer conn.Close()
 
 	// Send the UniversalProto message over the WebSocket
 	err = WSConn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
 	if err != nil {
-		log.Fatalf("Failed to send message over WebSocket: %v", err)
+		log.Fatalf("Failed to send message over WebSocket /proto: %v", err)
 	}
 
 	log.Println("Device firmware update failed message sent to C2 for device:", deviceCode)
