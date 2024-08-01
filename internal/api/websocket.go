@@ -312,7 +312,7 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 	defer conn.Close()
 
 	// Send the UniversalProto message over the WebSocket
-	err = WSConn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
+	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
 	if err != nil {
 		log.Fatalf("Failed to send message over WebSocket /proto: %v", err)
 	}

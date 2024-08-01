@@ -60,26 +60,92 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
-	// // Device authentication
+	// Device authentication
 	websocketURL := c2config.ServerURL + encodedAuth + "/true/proto"
-	log.Println(websocketURL)
 	headers := make(http.Header)
 	headers.Set("Device", "Basic "+encodedAuth)
 	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
 	if err != nil {
-		log.Fatalf("Failed to connect to WebSocket: %v", err)
+		log.Fatalf("Failed to connect to WebSocket /proto: %v", err)
 	}
-	// defer conn.Close()
+	defer conn.Close()
 
 	// Send the UniversalProto message over the WebSocket
 	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
 	if err != nil {
-		log.Fatalf("Failed to send message over WebSocket: %v", err)
+		log.Fatalf("Failed to send message over WebSocket /proto: %v", err)
 	}
 
 	log.Println("Device firmware update failed message sent to C2 for device:", deviceCode)
 
 }
+
+// func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelVersion string) {
+
+// 	fuotaUpdate := &pb.FuotaUpdate{
+// 		DeviceCode:      deviceCode,
+// 		Timestamp:       time.Now().Unix(),
+// 		FirmwareUpdated: modelVersion,
+// 		Success:         false,
+// 	}
+
+// 	// Marshal the FuotaUpdate message to bytes
+// 	fuotaUpdateBytes, err := proto.Marshal(fuotaUpdate)
+// 	if err != nil {
+// 		log.Fatalf("Failed to marshal FuotaUpdate message: %v", err)
+// 	}
+
+// 	typeArr := [1]int32{7202}
+// 	fuotaUpdateBytesArr := [1][]byte{fuotaUpdateBytes}
+
+// 	// Create the UniversalProto message and set its fields
+// 	universalProto := &pb.Universal{
+// 		Type:     typeArr[:],
+// 		Messages: fuotaUpdateBytesArr[:],
+// 	}
+
+// 	// Marshal the UniversalProto message to bytes
+// 	universalProtoBytes, err := proto.Marshal(universalProto)
+// 	if err != nil {
+// 		log.Fatalf("Failed to marshal UniversalProto message: %v", err)
+// 	}
+
+// 	var c2config C2Config = getC2ConfigFromToml()
+// 	// Establish a WebSocket connection
+// 	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+// 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
+
+// 	// // Device authentication
+// 	websocketURL := c2config.ServerURL + encodedAuth + "/true/proto"
+// 	log.Println(websocketURL)
+// 	headers := make(http.Header)
+// 	headers.Set("Device", "Basic "+encodedAuth)
+
+// 	websocketURL2 := c2config.ServerURL + encodedAuth + "/true"
+// 	connd, _, err := websocket.DefaultDialer.Dial(websocketURL2, nil)
+// 	if err != nil {
+// 		log.Fatalf("Failed to connect to WebSocket: %v", err)
+// 	}
+// 	if connd != nil {
+
+// 	}
+
+// 	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
+// 	if err != nil {
+// 		log.Fatalf("Failed to connect to WebSocket: %v", err)
+// 	}
+
+// 	defer conn.Close()
+
+// 	// Send the UniversalProto message over the WebSocket
+// 	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
+// 	if err != nil {
+// 		log.Fatalf("Failed to send message over WebSocket: %v", err)
+// 	}
+
+// 	log.Println("Device firmware update failed message sent to C2 for device:", deviceCode)
+
+// }
 
 func getC2ConfigFromToml() C2Config {
 
