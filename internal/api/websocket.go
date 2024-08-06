@@ -22,7 +22,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/brocaar/lorawan"
-	"github.com/brocaar/lorawan/applayer/fragmentation"
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	fuota "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
@@ -460,7 +459,7 @@ func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessionti
 		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
 			QueueItem: &api.DeviceQueueItem{
 				DevEui: device.DeviceCode,
-				FPort:  uint32(fragmentation.DefaultFPort),
+				FPort:  2,
 				Data:   dataBytes,
 			},
 		})
