@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,9 +20,10 @@ type Response struct {
 }
 
 type Msg struct {
-	ID       int         `json:"id"`
-	Data     []TagDetail `json:"data"`
-	DataSize int         `json:"dataSize"`
+	ID         int         `json:"id"`
+	Data       []TagDetail `json:"data"`
+	DataSize   int         `json:"dataSize"`
+	FinalBatch bool        `json:"finalBatch"`
 }
 
 type TagDetail struct {
@@ -29,15 +31,40 @@ type TagDetail struct {
 	TagDesc string `json:"tagDesc"`
 }
 
-var channelName string = "Channel5k"
+var channelName string = "Channel100k"
 
 func main() {
-	CreatChannel()
-	GetTagsFromC2WS()
+	// CreatChannel()
+	// GetTagsFromC2WS()
+	testEpoch()
+}
+
+func testEpoch() {
+	currentTime := time.Now()
+	futureTime := currentTime.Add(10 * time.Second)
+
+	epochTime := futureTime.Unix()
+
+	targetTime := time.Unix(epochTime, 0)
+
+	fmt.Printf("Current Time: %s\n", currentTime.Format(time.RFC3339))
+	fmt.Printf("target Time (10 seconds later): %s\n", futureTime.Format(time.RFC3339))
+	fmt.Printf("Unix Epoch Time (10 seconds later): %d\n", epochTime)
+
+	duration := targetTime.Sub(currentTime)
+
+	if duration < 0 {
+		fmt.Println("The target timestamp is in the past. Exiting.")
+	}
+
+	timer := time.NewTimer(duration)
+	fmt.Println("waiting for 10 secs")
+	<-timer.C //waiting until the timestamp hits
+	fmt.Println("10 secs passed")
 }
 
 func GetTagsFromC2WS() {
-	username := "saikiran.o2"
+	username := "saikiran.o2testing"
 	password := "HydeVil#71"
 
 	//creating authentication string
@@ -71,12 +98,13 @@ func GetTagsFromC2WS() {
 
 	CreateDevice(deviceName)
 	// Handle incoming messages from the WebSocket server
+	var responses []Response
 	for {
 		_, message, err := c.ReadMessage()
 		// fmt.Println(message)
 		if err != nil {
 			log.Println("Read error:", err)
-			return
+			// return
 		}
 		messsageStr := string(message)
 		messsageStr = strings.Replace(messsageStr, `"{`, `{`, -1)
@@ -87,6 +115,14 @@ func GetTagsFromC2WS() {
 			return
 		}
 
+		responses = append(responses, response)
+		if response.Msg.FinalBatch == true {
+			fmt.Println("All tags received from WS")
+			break
+		}
+	}
+
+	for _, response := range responses {
 		for _, tag := range response.Msg.Data {
 			if cnt > 990 {
 				devCnt++
@@ -97,14 +133,14 @@ func GetTagsFromC2WS() {
 			fmt.Print("Tag Name:", tag.TagName, " ", deviceName, " ")
 			// fmt.Println("Tag Description:", tag.TagDesc)
 			AddTagToKep(deviceName, tag.TagName, tag.TagDesc)
-
-			// if cnt%3 == 0 {
+			time.Sleep(10 * time.Millisecond)
+			// if cnt%10 == 0 {
 			// 	time.Sleep(100 * time.Millisecond)
 			// }
 			cnt++
 		}
-
 	}
+
 }
 
 func CreatChannel() {
@@ -147,6 +183,7 @@ func CreatChannel() {
 		return
 	}
 	defer response.Body.Close()
+	defer client.CloseIdleConnections()
 
 	// Check the response status code
 	if response.StatusCode == http.StatusCreated {
@@ -205,6 +242,7 @@ func CreateDevice(deviceName string) {
 		return
 	}
 	defer response.Body.Close()
+	defer client.CloseIdleConnections()
 
 	// Check the response status code
 	if response.StatusCode == http.StatusCreated {
@@ -267,6 +305,7 @@ func AddTagToKep(devicename, name, desc string) {
 		return
 	}
 	defer response.Body.Close()
+	client.CloseIdleConnections()
 
 	// Check the response status code
 	if response.StatusCode == http.StatusCreated {

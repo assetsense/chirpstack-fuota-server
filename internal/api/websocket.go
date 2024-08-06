@@ -22,9 +22,12 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/brocaar/lorawan"
+	"github.com/brocaar/lorawan/applayer/fragmentation"
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	fuota "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
+	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/jmoiron/sqlx"
 
 	pb "github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota/proto"
@@ -68,6 +71,8 @@ type C2Config struct {
 	Password     string
 	Frequency    string
 	LastSyncTime string
+	StartTime    int64
+	SessionTime  int
 }
 
 type FirmwareUpdateResponse struct {
@@ -418,11 +423,53 @@ func handleMessage(message string) {
 			var payload []byte = GetFirmwarePayload(model.ModelId, model.Version)
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
+
+				targetTimeEpoch := c2config.StartTime
+				sessionTime := c2config.SessionTime
+				sendTimestampToDevices(devices, targetTimeEpoch, sessionTime)
+
+				targetTime := time.Unix(targetTimeEpoch, 0)
+
+				currentTime := time.Now()
+				duration := targetTime.Sub(currentTime)
+
+				if duration < 0 {
+					fmt.Println("The target timestamp is in the past. Exiting.")
+					return nil
+				}
+
+				timer := time.NewTimer(duration)
+				<-timer.C //waiting until the timestamp hits
+
 				go createDeploymentRequest(model.Version, devices, applicationId, region, payload)
 			}
 			return nil
 		}); err != nil {
 			log.Fatal(err)
+		}
+	}
+}
+
+func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessiontime int) {
+	for _, device := range devices {
+
+		data := fmt.Sprintf("FUOTA_START,%d,%d,", timestamp, sessiontime)
+
+		dataBytes := []byte(data)
+
+		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
+			QueueItem: &api.DeviceQueueItem{
+				DevEui: device.DeviceCode,
+				FPort:  uint32(fragmentation.DefaultFPort),
+				Data:   dataBytes,
+			},
+		})
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"dev_eui": device.DeviceCode,
+			}).Error("fuota: enqueue timestamp payload error")
+		} else {
+			log.Println("enqueue timestamp payload success for device:", device.DeviceCode)
 		}
 	}
 }
@@ -584,6 +631,18 @@ func getC2ConfigFromToml() C2Config {
 	}
 
 	c2config.Frequency = viper.GetString("c2App.frequency")
+	if c2config.Frequency == "" {
+		log.Fatal("frequency not found in c2intbootconfig.toml file")
+	}
+
+	c2config.StartTime = viper.GetInt64("c2App.starttime")
+	if c2config.StartTime == 0 {
+		log.Fatal("starttime not found in c2intbootconfig.toml file")
+	}
+	c2config.SessionTime = viper.GetInt("c2App.sessiontime")
+	if c2config.SessionTime == 0 {
+		log.Fatal("sessiontime not found in c2intbootconfig.toml file")
+	}
 
 	return c2config
 }
