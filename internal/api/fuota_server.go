@@ -83,7 +83,8 @@ func (a *FUOTAServerAPI) CreateDeployment(ctx context.Context, req *fapi.CreateD
 		return nil, err
 	}
 
-	go func(depl *fuota.Deployment) {
+	//removed 'go' keyword to run synchronously
+	func(depl *fuota.Deployment) {
 		if err := depl.Run(context.Background()); err != nil {
 			log.WithError(err).WithField("deployment_id", depl.GetID()).Error("api: fuota deployment error")
 		}

@@ -5,21 +5,16 @@ import (
 	"crypto/aes"
 	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gofrs/uuid"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/gorilla/websocket"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq/hstore"
 	log "github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 
 	"github.com/brocaar/lorawan"
 	"github.com/brocaar/lorawan/applayer/clocksync"
@@ -27,12 +22,11 @@ import (
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	"github.com/brocaar/lorawan/gps"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/firmUpdateInfo"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/chirpstack/chirpstack/api/go/v4/common"
 	"github.com/chirpstack/chirpstack/api/go/v4/integration"
-
-	pb "github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota/proto"
 )
 
 // FragmentationSessionStatusRequestType type.
@@ -293,6 +287,10 @@ func (d *Deployment) Run(ctx context.Context) error {
 			return err
 		}
 	}
+
+	firmUpdateInfo.FirmUpdateInfo["firmUpdateRunning"] = false
+	firmUpdateInfo.FirmUpdateInfo["firmVersion"] = ""
+	firmUpdateInfo.FirmUpdateInfo["region"] = ""
 
 	return nil
 }
@@ -1586,151 +1584,4 @@ devLoop:
 	}
 
 	return nil
-}
-
-var C2config C2Config = getC2ConfigFromToml()
-
-func (d *Deployment) handleFuotaUpdate(ctx context.Context, pl integration.UplinkEvent) error {
-	// var devEUI lorawan.EUI64
-	// if err := devEUI.UnmarshalText([]byte(pl.GetDeviceInfo().GetDevEui())); err != nil {
-	// 	return err
-	// }
-	deviceCode := pl.GetDeviceInfo().GetDevEui()
-	firmwareVersion := ""
-
-	fuotaUpdate := &pb.FuotaUpdate{
-		DeviceCode:      deviceCode,
-		Timestamp:       time.Now().Unix(),
-		FirmwareUpdated: firmwareVersion,
-		Success:         true,
-	}
-
-	// Marshal the FuotaUpdate message to bytes
-	fuotaUpdateBytes, err := proto.Marshal(fuotaUpdate)
-	if err != nil {
-		log.Fatalf("Failed to marshal FuotaUpdate message: %v", err)
-	}
-
-	typeArr := [1]int32{7202}
-	fuotaUpdateBytesArr := [1][]byte{fuotaUpdateBytes}
-
-	// Create the UniversalProto message and set its fields
-	universalProto := &pb.Universal{
-		Type:     typeArr[:],
-		Messages: fuotaUpdateBytesArr[:],
-	}
-
-	// Marshal the UniversalProto message to bytes
-	universalProtoBytes, err := proto.Marshal(universalProto)
-	if err != nil {
-		log.Fatalf("Failed to marshal UniversalProto message: %v", err)
-	}
-
-	// Establish a WebSocket connection
-	authString := fmt.Sprintf("%s:%s", C2config.Username, C2config.Password)
-	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
-
-	// Device authentication
-	websocketURL := C2config.ServerURL + encodedAuth + "/true"
-	headers := make(http.Header)
-	headers.Set("Device", "Basic "+encodedAuth)
-	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
-	if err != nil {
-		log.Fatalf("Failed to connect to WebSocket: %v", err)
-	}
-	defer conn.Close()
-
-	// Send the UniversalProto message over the WebSocket
-	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)
-	if err != nil {
-		log.Fatalf("Failed to send message over WebSocket: %v", err)
-	}
-
-	log.Println("Device new firmware version status sent to C2 for device:", pl.GetDeviceInfo().GetDevEui())
-
-	if err := storage.Transaction(func(tx sqlx.Ext) error {
-		err := storage.UpdateDeviceFirmwareVersion(context.Background(), tx, deviceCode, firmwareVersion)
-		if err != nil {
-			return fmt.Errorf("UpdateDeviceFirmwareVersion error: %w", err)
-		} else {
-			log.Println("Device new firmware version updated in db for device:", deviceCode, " new version is:", firmwareVersion)
-		}
-
-		return nil
-	}); err != nil {
-		log.Fatal(err)
-	}
-
-	return nil
-}
-
-func getC2ConfigFromToml() C2Config {
-
-	viper.SetConfigName("c2intbootconfig")
-	viper.SetConfigType("toml")
-	viper.AddConfigPath("/usr/local/bin")
-
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			log.Fatalf("c2intbootconfig.toml file not found: %v", err)
-		} else {
-			log.Fatalf("Error reading c2intbootconfig.toml file: %v", err)
-		}
-	}
-
-	var c2config C2Config
-
-	c2config.Username = viper.GetString("c2App.username")
-	if c2config.Username == "" {
-		log.Fatal("username not found in c2intbootconfig.toml file")
-	}
-
-	c2config.Password = viper.GetString("c2App.password")
-	if c2config.Password == "" {
-		log.Fatal("password not found in c2intbootconfig.toml file")
-	}
-
-	c2config.ServerURL = viper.GetString("c2App.serverUrl")
-	if c2config.ServerURL == "" {
-		log.Fatal("serverUrl not found in c2intbootconfig.toml file")
-	}
-
-	c2config.Frequency = viper.GetString("c2App.frequency")
-	if c2config.Frequency == "" {
-		log.Fatal("frequency not found in c2intbootconfig.toml file")
-	}
-
-	c2config.RabbitMQUsername = viper.GetString("rabbitmq.username")
-	if c2config.RabbitMQUsername == "" {
-		log.Fatal("RabbitMQUsername  not found in c2intbootconfig.toml file")
-	}
-
-	c2config.RabbitMQPassword = viper.GetString("rabbitmq.password")
-	if c2config.RabbitMQPassword == "" {
-		log.Fatal("RabbitMQPassword not found in c2intbootconfig.toml file")
-	}
-
-	c2config.RabbitMQHost = viper.GetString("rabbitmq.host")
-	if c2config.RabbitMQPassword == "" {
-		log.Fatal("RabbitMQHost not found in c2intbootconfig.toml file")
-	}
-
-	c2config.RabbitMQPort = viper.GetString("rabbitmq.port")
-	if c2config.RabbitMQPassword == "" {
-		log.Fatal("RabbitMQPort not found in c2intbootconfig.toml file")
-	}
-
-	return c2config
-}
-
-type C2Config struct {
-	ServerURL        string
-	Username         string
-	Password         string
-	Frequency        string
-	LastSyncTime     string
-	RabbitMQUsername string
-	RabbitMQPassword string
-	RabbitMQHost     string
-	RabbitMQPort     string
 }

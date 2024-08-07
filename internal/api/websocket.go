@@ -25,6 +25,7 @@ import (
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	fuota "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/firmUpdateInfo"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/jmoiron/sqlx"
@@ -173,7 +174,7 @@ func ReceiveWSMessageBinary() []byte {
 	if err != nil {
 		log.Fatal("Read error:", err)
 	}
-	log.Info("Websocket Message received: " + string(message)[:10])
+	log.Info("Websocket Message received: " + string(message)[:20])
 	return message
 }
 
@@ -185,13 +186,13 @@ func ReceiveMessageDummyForModels() string {
 	return dummyResponseJson
 }
 
-func ReceiveMessageDummyForFirmware() string {
+func ReceiveMessageDummyForFirmware() []byte {
 	// {"msg_type":"FIRMWARE_FILE_RES", "modelId": 1234, "version": "1.0.1", "firmware":base64}
 
 	dummyResponseJson := `{"msg_type": "FIRMWARE_FILE_RES","modelId": 1234,"version": "1.0.1","firmware": "SGVsbG8sIFdvcmxk"}`
 
 	log.Info("Dummy Message received: " + dummyResponseJson)
-	return dummyResponseJson
+	return []byte(dummyResponseJson)
 }
 
 func Scheduler() {
@@ -357,6 +358,7 @@ func ParseFrequency(frequency string) (int, error) {
 }
 
 func CheckForFirmwareUpdate() {
+
 	log.Info("Checking for firmware updates")
 	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
 	SendWSMessage("{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}")
@@ -420,27 +422,33 @@ func handleMessage(message string) {
 				}
 			}
 			var payload []byte = GetFirmwarePayload(model.ModelId, model.Version)
+
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
 
 				targetTimeEpoch := c2config.StartTime
 				sessionTime := c2config.SessionTime
+
 				sendTimestampToDevices(devices, targetTimeEpoch, sessionTime)
 
 				targetTime := time.Unix(targetTimeEpoch, 0)
 
 				currentTime := time.Now()
+
 				duration := targetTime.Sub(currentTime)
 
 				if duration < 0 {
-					fmt.Println("The target timestamp is in the past. Exiting.")
+					log.Println("The target timestamp is in the past. Exiting.")
 					return nil
 				}
 
 				timer := time.NewTimer(duration)
+
+				log.Println("Firmware update request scheduled at ", targetTime)
 				<-timer.C //waiting until the timestamp hits
 
-				go createDeploymentRequest(model.Version, devices, applicationId, region, payload)
+				createDeploymentRequest(model.Version, devices, applicationId, region, payload)
+				break
 			}
 			return nil
 		}); err != nil {
@@ -475,6 +483,15 @@ func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessionti
 
 func createDeploymentRequest(firmwareVersion string, devices []storage.Device, applicationId string, region string, payload []byte) {
 
+	if firmUpdateInfo.FirmUpdateInfo["firmUpdateRunning"] == true {
+		log.Info("Current Firmware Update request cannot proceed since another Firmware Update is running for Region:", firmUpdateInfo.FirmUpdateInfo["region"], " and version:", firmUpdateInfo.FirmUpdateInfo["firmVersion"])
+		return
+	}
+
+	firmUpdateInfo.FirmUpdateInfo["firmUpdateRunning"] = true
+	firmUpdateInfo.FirmUpdateInfo["firmVersion"] = firmwareVersion
+	firmUpdateInfo.FirmUpdateInfo["region"] = region
+
 	// mcRootKey, err := multicastsetup.GetMcRootKeyForGenAppKey(lorawan.AES128Key{0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
 	mcRootKey, err := multicastsetup.GetMcRootKeyForGenAppKey(lorawan.AES128Key{0x51, 0xA9, 0x98, 0x44, 0x7B, 0x33, 0x04, 0xB3, 0x9A, 0xC1, 0x6A, 0x13, 0x80, 0xE2, 0xA8, 0xEA})
 	if err != nil {
@@ -494,6 +511,7 @@ func createDeploymentRequest(firmwareVersion string, devices []storage.Device, a
 	var redundancy uint32 = uint32(len(fdata)) / (fragsize * redundancy_per)
 	redundancy++
 	var pay_ld_len uint32 = uint32(len(fdata))
+	fmt.Println("// file size : ", (len(payload)))
 	fmt.Println("// data length : ", pay_ld_len)
 	fmt.Println("// fragSize = ", fragsize)
 	fmt.Println("// fragNb = ", pay_ld_len/fragsize)
