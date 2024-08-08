@@ -398,10 +398,6 @@ func handleMessage(message string) {
 			// Separate devices based on region and store in the map
 			for _, device := range devices {
 				if err := storage.Transaction(func(tx sqlx.Ext) error {
-					errr := storage.IncrementDeviceAttempt(context.Background(), tx, device.DeviceCode)
-					if errr != nil {
-						return fmt.Errorf("IncrementDeviceAttempt error: %w", errr)
-					}
 
 					failed, errrr := storage.GetDeviceFirmwareUpdateFailed(context.Background(), tx, device.DeviceCode)
 					if errrr != nil {
@@ -461,9 +457,8 @@ func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessionti
 	for _, device := range devices {
 
 		data := fmt.Sprintf("FUOTA_START,%d,%d,", timestamp, sessiontime)
-		fmt.Println("fuota start msg:", data)
 		dataBytes := []byte(data)
-		fmt.Println("databytes:", dataBytes)
+
 		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
 			QueueItem: &api.DeviceQueueItem{
 				DevEui: device.DeviceCode,
@@ -582,6 +577,17 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 
 	var deploymentDevices []*fuota.DeploymentDevice
 	for _, device := range devices {
+
+		if err := storage.Transaction(func(tx sqlx.Ext) error {
+			errr := storage.IncrementDeviceAttempt(context.Background(), tx, device.DeviceCode)
+			if errr != nil {
+				return fmt.Errorf("IncrementDeviceAttempt error: %w", errr)
+			}
+			return nil
+		}); err != nil {
+			log.Fatal(err)
+		}
+
 		log.Info("device eui: " + device.DeviceCode)
 		deploymentDevices = append(deploymentDevices, &fuota.DeploymentDevice{
 			DevEui:    device.DeviceCode,
