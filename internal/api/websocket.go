@@ -367,7 +367,7 @@ func CheckForFirmwareUpdate() {
 	// response := ReceiveMessageDummyForModels()
 	response := ReceiveWSMessage()
 
-	handleMessage(response)
+	go handleMessage(response)
 }
 
 func handleMessage(message string) {
@@ -461,9 +461,23 @@ func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessionti
 	for _, device := range devices {
 
 		data := fmt.Sprintf("FUOTA_START,%d,%d,", timestamp, sessiontime)
-
+		fmt.Println("fuota start msg:", data)
 		dataBytes := []byte(data)
-
+		fmt.Println("databytes:", dataBytes)
+		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
+			QueueItem: &api.DeviceQueueItem{
+				DevEui: device.DeviceCode,
+				FPort:  2,
+				Data:   dataBytes,
+			},
+		})
+		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
+			QueueItem: &api.DeviceQueueItem{
+				DevEui: device.DeviceCode,
+				FPort:  2,
+				Data:   dataBytes,
+			},
+		})
 		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
 			QueueItem: &api.DeviceQueueItem{
 				DevEui: device.DeviceCode,
@@ -613,6 +627,7 @@ func GetFirmwarePayload(modelId int, version string) []byte {
 	}
 	// fmt.Println(firmwareFileResponse.ModelId)
 	// fmt.Println(firmwareFileResponse.Version)
+	// fmt.Println(firmwareFileResponse.Firmware)
 	return firmwareFileResponse.Firmware
 }
 
