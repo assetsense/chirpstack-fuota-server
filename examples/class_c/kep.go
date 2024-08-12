@@ -35,10 +35,10 @@ type TagDetail struct {
 var channelName string = "Channel100k"
 
 func main() {
-	// CreatChannel()
-	// GetTagsFromC2WS()
+	CreatChannel()
+	GetTagsFromC2WS()
 	// testEpoch()
-	SendUdp()
+	// SendUdp()
 }
 
 func SendUdp() {

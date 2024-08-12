@@ -397,21 +397,13 @@ func handleMessage(message string) {
 
 			// Separate devices based on region and store in the map
 			for _, device := range devices {
-				if err := storage.Transaction(func(tx sqlx.Ext) error {
 
-					failed, errrr := storage.GetDeviceFirmwareUpdateFailed(context.Background(), tx, device.DeviceCode)
-					if errrr != nil {
-						return fmt.Errorf("GetDeviceFirmwareUpdateFailed error: %w", errrr)
+				if err := storage.Transaction(func(tx sqlx.Ext) error {
+					region, err := storage.GetRegionByDeviceCode(context.Background(), tx, device.DeviceCode)
+					if err != nil {
+						return fmt.Errorf("GetRegionByDeviceId error: %w", err)
 					}
-					if failed == false {
-						region, err := storage.GetRegionByDeviceCode(context.Background(), tx, device.DeviceCode)
-						if err != nil {
-							return fmt.Errorf("GetRegionByDeviceId error: %w", err)
-						}
-						deviceMap[region] = append(deviceMap[region], device)
-					} else {
-						SendFailedDevicesStatusToC2(device.DeviceCode, device.FirmwareVersion, model.Version)
-					}
+					deviceMap[region] = append(deviceMap[region], device)
 					return nil
 				}); err != nil {
 					log.Fatal(err)
@@ -422,6 +414,11 @@ func handleMessage(message string) {
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
 
+				readyDevices := prepareDevicesForUpdate(devices, model.Version)
+
+				if len(readyDevices) == 0 {
+					continue
+				}
 				targetTimeEpoch := c2config.StartTime
 				sessionTime := c2config.SessionTime
 
@@ -450,7 +447,33 @@ func handleMessage(message string) {
 		}); err != nil {
 			log.Fatal(err)
 		}
+		break
 	}
+}
+
+func prepareDevicesForUpdate(devices []storage.Device, modelVersion string) []storage.Device {
+	var devicesReady []storage.Device
+	for _, device := range devices {
+		if err := storage.Transaction(func(tx sqlx.Ext) error {
+			errr := storage.IncrementDeviceAttempt(context.Background(), tx, device.DeviceCode)
+			if errr != nil {
+				return fmt.Errorf("IncrementDeviceAttempt error: %w", errr)
+			}
+			failed, errrr := storage.GetDeviceFirmwareUpdateFailed(context.Background(), tx, device.DeviceCode)
+			if errrr != nil {
+				return fmt.Errorf("GetDeviceFirmwareUpdateFailed error: %w", errrr)
+			}
+			if failed == true {
+				SendFailedDevicesStatusToC2(device.DeviceCode, device.FirmwareVersion, modelVersion)
+			} else {
+				devicesReady = append(devicesReady, device)
+			}
+			return nil
+		}); err != nil {
+			log.Fatal(err)
+		}
+	}
+	return devicesReady
 }
 
 func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessiontime int) {
@@ -577,16 +600,6 @@ func GetDeploymentDevices(mcRootKey lorawan.AES128Key, devices []storage.Device)
 
 	var deploymentDevices []*fuota.DeploymentDevice
 	for _, device := range devices {
-
-		if err := storage.Transaction(func(tx sqlx.Ext) error {
-			errr := storage.IncrementDeviceAttempt(context.Background(), tx, device.DeviceCode)
-			if errr != nil {
-				return fmt.Errorf("IncrementDeviceAttempt error: %w", errr)
-			}
-			return nil
-		}); err != nil {
-			log.Fatal(err)
-		}
 
 		log.Info("device eui: " + device.DeviceCode)
 		deploymentDevices = append(deploymentDevices, &fuota.DeploymentDevice{

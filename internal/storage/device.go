@@ -19,11 +19,13 @@ type DeviceProfile struct {
 
 // Device represents a row in the device table
 type Device struct {
-	DeviceCode      string `db:"devicecode"`
-	ModelId         int    `db:"modelid"`
-	ProfileId       int    `db:"profileid"`
-	FirmwareVersion string `db:"firmwareversion"`
-	Status          int    `db:"status"`
+	DeviceCode           string `db:"devicecode"`
+	ModelId              int    `db:"modelid"`
+	ProfileId            int    `db:"profileid"`
+	FirmwareVersion      string `db:"firmwareversion"`
+	Status               int    `db:"status"`
+	FirmwareUpdateFailed bool   `db:"firmwareupdatefailed"`
+	Attempts             int    `db:"attempts"`
 }
 
 // GetDevicesByModelAndVersion returns devices with the given modelId and a firmwareVersion less than the given version
