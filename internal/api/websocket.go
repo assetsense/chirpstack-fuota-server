@@ -486,11 +486,13 @@ func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessionti
 
 		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
 			QueueItem: &api.DeviceQueueItem{
-				DevEui: device.DeviceCode,
-				FPort:  2,
-				Data:   dataBytes,
+				DevEui:    device.DeviceCode,
+				FPort:     2,
+				Data:      dataBytes,
+				Confirmed: true,
 			},
 		})
+
 		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
 			QueueItem: &api.DeviceQueueItem{
 				DevEui: device.DeviceCode,
@@ -498,13 +500,7 @@ func sendTimestampToDevices(devices []storage.Device, timestamp int64, sessionti
 				Data:   dataBytes,
 			},
 		})
-		_, err = as.DeviceClient().Enqueue(context.Background(), &api.EnqueueDeviceQueueItemRequest{
-			QueueItem: &api.DeviceQueueItem{
-				DevEui: device.DeviceCode,
-				FPort:  2,
-				Data:   dataBytes,
-			},
-		})
+
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"dev_eui": device.DeviceCode,
