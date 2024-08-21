@@ -22,7 +22,7 @@ type C2Config struct {
 }
 
 func main() {
-	SendFailedDevicesStatusToC2("1450303692325820", "1.0.0", "2.0.0")
+	SendFailedDevicesStatusToC2("111111111111111", "1.0.0", "2.0.0")
 }
 
 func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelVersion string) {
@@ -55,20 +55,39 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 		log.Fatalf("Failed to marshal UniversalProto message: %v", err)
 	}
 
-	var c2config C2Config = getC2ConfigFromToml()
+	// var c2config C2Config = getC2ConfigFromToml()
 	// Establish a WebSocket connection
-	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	authString := fmt.Sprintf("%s:%s", "saikiran.o2", "HydeVil#71")
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
 	// Device authentication
-	websocketURL := c2config.ServerURL + encodedAuth + "/true/proto"
+	websocketURL := "wss://qa65.assetsense.com/dev/proto/historical"
 	headers := make(http.Header)
-	headers.Set("Device", "Basic "+encodedAuth)
-	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
+	headers.Set("Authorization", "Basic "+encodedAuth)
+	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, headers)
 	if err != nil {
 		log.Fatalf("Failed to connect to WebSocket /proto: %v", err)
 	}
+	log.Println("Connected to websocket 1")
+	conn2, _, err := websocket.DefaultDialer.Dial(websocketURL, headers)
+	if err != nil {
+		log.Fatalf("Failed to connect to WebSocket /proto: %v", err)
+	}
+	log.Println("Connected to websocket 2")
+	conn3, _, err := websocket.DefaultDialer.Dial(websocketURL, headers)
+	if err != nil {
+		log.Fatalf("Failed to connect to WebSocket /proto: %v", err)
+	}
+	log.Println("Connected to websocket 3")
+	conn4, _, err := websocket.DefaultDialer.Dial(websocketURL, headers)
+	if err != nil {
+		log.Fatalf("Failed to connect to WebSocket /proto: %v", err)
+	}
+	log.Println("Connected to websocket 4")
 	defer conn.Close()
+	defer conn2.Close()
+	defer conn3.Close()
+	defer conn4.Close()
 
 	// Send the UniversalProto message over the WebSocket
 	err = conn.WriteMessage(websocket.BinaryMessage, universalProtoBytes)

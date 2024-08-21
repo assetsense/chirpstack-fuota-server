@@ -66,13 +66,13 @@ var regions = map[string]fuota.Region{
 }
 
 type C2Config struct {
-	ServerURL    string
-	Username     string
-	Password     string
-	Frequency    string
-	LastSyncTime string
-	StartTime    int64
-	SessionTime  int
+	ServerURL     string
+	Username      string
+	Password      string
+	Frequency     string
+	LastSyncTime  string
+	FuotaInterval int64
+	SessionTime   int
 }
 
 type FirmwareUpdateResponse struct {
@@ -419,14 +419,16 @@ func handleMessage(message string) {
 				if len(readyDevices) == 0 {
 					continue
 				}
-				targetTimeEpoch := c2config.StartTime
+
+				currentTime := time.Now()
+
+				targetTime := currentTime.Add(time.Duration(c2config.FuotaInterval) * time.Second)
+
+				targetTimeEpoch := targetTime.Unix()
+
 				sessionTime := c2config.SessionTime
 
 				sendTimestampToDevices(devices, targetTimeEpoch, sessionTime)
-
-				targetTime := time.Unix(targetTimeEpoch, 0)
-
-				currentTime := time.Now()
 
 				duration := targetTime.Sub(currentTime)
 
@@ -686,9 +688,9 @@ func getC2ConfigFromToml() C2Config {
 		log.Fatal("frequency not found in c2intbootconfig.toml file")
 	}
 
-	c2config.StartTime = viper.GetInt64("c2App.starttime")
-	if c2config.StartTime == 0 {
-		log.Fatal("starttime not found in c2intbootconfig.toml file")
+	c2config.FuotaInterval = viper.GetInt64("c2App.fuotainterval")
+	if c2config.FuotaInterval == 0 {
+		log.Fatal("fuotainterval not found in c2intbootconfig.toml file")
 	}
 	c2config.SessionTime = viper.GetInt("c2App.sessiontime")
 	if c2config.SessionTime == 0 {
