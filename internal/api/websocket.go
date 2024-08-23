@@ -73,6 +73,7 @@ type C2Config struct {
 	LastSyncTime  string
 	FuotaInterval int64
 	SessionTime   int
+	MulticastIP   string
 }
 
 type FirmwareUpdateResponse struct {
@@ -95,7 +96,7 @@ var WSConn *websocket.Conn
 var GrpcConn *grpc.ClientConn
 var err error
 
-var c2config C2Config = getC2ConfigFromToml()
+var C2config C2Config = getC2ConfigFromToml()
 var applicationId string = getApplicationId()
 
 func InitGrpcConnection() {
@@ -113,11 +114,11 @@ func InitGrpcConnection() {
 
 func InitWSConnection() error {
 	//creating authentication string
-	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	authString := fmt.Sprintf("%s:%s", C2config.Username, C2config.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
 	// Device authentication
-	websocketURL := c2config.ServerURL + encodedAuth + "/true"
+	websocketURL := C2config.ServerURL + encodedAuth + "/true"
 	headers := make(http.Header)
 	headers.Set("Device", "Basic "+encodedAuth)
 
@@ -196,7 +197,7 @@ func ReceiveMessageDummyForFirmware() []byte {
 }
 
 func Scheduler() {
-	frequency, err := ParseFrequency(c2config.Frequency)
+	frequency, err := ParseFrequency(C2config.Frequency)
 	if err != nil {
 		log.Error(err)
 		return
@@ -303,11 +304,11 @@ func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelV
 
 	// var c2config C2Config = getC2ConfigFromToml()
 	// Establish a WebSocket connection
-	authString := fmt.Sprintf("%s:%s", c2config.Username, c2config.Password)
+	authString := fmt.Sprintf("%s:%s", C2config.Username, C2config.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
 
 	// Device authentication
-	websocketURL := c2config.ServerURL + encodedAuth + "/true/proto"
+	websocketURL := C2config.ServerURL + encodedAuth + "/true/proto"
 	headers := make(http.Header)
 	headers.Set("Device", "Basic "+encodedAuth)
 	conn, _, err := websocket.DefaultDialer.Dial(websocketURL, nil)
@@ -422,11 +423,11 @@ func handleMessage(message string) {
 
 				currentTime := time.Now()
 
-				targetTime := currentTime.Add(time.Duration(c2config.FuotaInterval) * time.Second)
+				targetTime := currentTime.Add(time.Duration(C2config.FuotaInterval) * time.Second)
 
 				targetTimeEpoch := targetTime.Unix()
 
-				sessionTime := c2config.SessionTime
+				sessionTime := C2config.SessionTime
 
 				sendTimestampToDevices(devices, targetTimeEpoch, sessionTime)
 
@@ -693,6 +694,11 @@ func getC2ConfigFromToml() C2Config {
 		log.Fatal("sessiontime not found in c2intbootconfig.toml file")
 	}
 
+	c2config.MulticastIP = viper.GetString("c2App.multicastip")
+	if c2config.MulticastIP == "" {
+		log.Fatal("multicastip not found in c2intbootconfig.toml file")
+	}
+
 	return c2config
 }
 
@@ -734,7 +740,7 @@ func GetStatus(id uuid.UUID) {
 }
 
 func SendUdpMessage(message string) {
-	multicastAddrStr := "224.1.1.1:7002"
+	multicastAddrStr := C2config.MulticastIP
 
 	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {

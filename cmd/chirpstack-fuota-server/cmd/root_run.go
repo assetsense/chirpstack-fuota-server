@@ -92,7 +92,7 @@ func setupAPI() error {
 }
 
 func SendUdpMessage(message string) {
-	multicastAddrStr := "224.1.1.1:7002"
+	multicastAddrStr := api.C2config.MulticastIP
 
 	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {
