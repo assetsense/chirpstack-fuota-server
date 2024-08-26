@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -158,7 +159,9 @@ func StartScheduler() {
 
 func InitUdpConnection() {
 
-	multicastAddrStr := api.C2config.MulticastIP
+	multicastip := api.C2config.MulticastIP
+	multicastport := api.C2config.MulticastPort
+	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)
 
 	multicastAddr, err = net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {

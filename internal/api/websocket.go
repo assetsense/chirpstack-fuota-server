@@ -74,6 +74,7 @@ type C2Config struct {
 	FuotaInterval int64
 	SessionTime   int
 	MulticastIP   string
+	MulticastPort int
 }
 
 type FirmwareUpdateResponse struct {
@@ -699,6 +700,11 @@ func getC2ConfigFromToml() C2Config {
 		log.Fatal("multicastip not found in c2intbootconfig.toml file")
 	}
 
+	c2config.MulticastPort = viper.GetInt("c2App.multicastport")
+	if c2config.MulticastPort == 0 {
+		log.Fatal("multicastport not found in c2intbootconfig.toml file")
+	}
+
 	return c2config
 }
 
@@ -740,7 +746,9 @@ func GetStatus(id uuid.UUID) {
 }
 
 func SendUdpMessage(message string) {
-	multicastAddrStr := C2config.MulticastIP
+	multicastip := C2config.MulticastIP
+	multicastport := C2config.MulticastPort
+	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)
 
 	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {

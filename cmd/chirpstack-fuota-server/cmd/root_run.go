@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"strconv"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -92,7 +93,9 @@ func setupAPI() error {
 }
 
 func SendUdpMessage(message string) {
-	multicastAddrStr := api.C2config.MulticastIP
+	multicastip := api.C2config.MulticastIP
+	multicastport := api.C2config.MulticastPort
+	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)
 
 	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {
