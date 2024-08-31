@@ -57,6 +57,14 @@ func Setup(conf *config.Config) error {
 	return nil
 }
 
+func Reset() error {
+	if err := MigrateDrop(DB()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func MigrateUp(db *sqlx.DB) error {
 	log.Info("storage: applying PostgreSQL schema migrations")
 
@@ -136,6 +144,39 @@ func MigrateDown(db *sqlx.DB) error {
 		}).Info("storage: applied database migrations")
 	}
 
+	return nil
+}
+
+func MigrateDrop(db *sqlx.DB) error {
+	if db == nil {
+		return nil
+	}
+	log.Info("storage: dropping PostgreSQL schema migrations")
+
+	statikFS, err := fs.New()
+	if err != nil {
+		return fmt.Errorf("statik fs error: %w", err)
+	}
+
+	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
+	if err != nil {
+		return fmt.Errorf("migrate postgres driver error: %w", err)
+	}
+
+	src, err := httpfs.New(statikFS, "/")
+	if err != nil {
+		return fmt.Errorf("new httpfs error: %w", err)
+	}
+
+	m, err := migrate.NewWithInstance("httpfs", src, "postgres", driver)
+	if err != nil {
+		return fmt.Errorf("new migrate instance error: %w", err)
+	}
+
+	if err := m.Drop(); err != nil {
+		return fmt.Errorf("migrate drop error: %w", err)
+	}
+	log.Info("Database reset is successfull")
 	return nil
 }
 

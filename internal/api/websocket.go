@@ -99,6 +99,7 @@ var err error
 
 var C2config C2Config = getC2ConfigFromToml()
 var applicationId string = getApplicationId()
+var stopScheduler bool = false
 
 func InitGrpcConnection() {
 	dialOpts := []grpc.DialOption{
@@ -111,6 +112,13 @@ func InitGrpcConnection() {
 		panic(err)
 	}
 	log.Info("Grpc Connection Established")
+}
+
+func CloseGrpcConnection() {
+	if GrpcConn != nil {
+		GrpcConn.Close()
+		log.Info("Grpc Connection Closed")
+	}
 }
 
 func InitWSConnection() error {
@@ -144,13 +152,16 @@ func InitWSConnection() error {
 }
 
 func CloseWSConnection() {
+	if WSConn == nil {
+		return
+	}
 	err = WSConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
 		log.Error("Write close error:", err)
 	}
 
 	WSConn.Close()
-	log.Info("Websocket Connection Closed")
+	log.Info("C2 Websocket Connection Closed")
 }
 
 func SendWSMessage(message string) {
@@ -198,6 +209,7 @@ func ReceiveMessageDummyForFirmware() []byte {
 }
 
 func Scheduler() {
+	stopScheduler = false
 	frequency, err := ParseFrequency(C2config.Frequency)
 	if err != nil {
 		log.Error(err)
@@ -216,6 +228,10 @@ func Scheduler() {
 
 	retries := 2
 	for {
+		if stopScheduler == true {
+			break
+		}
+
 		select {
 		case <-ticker.C:
 			retries = 2
@@ -230,6 +246,11 @@ func Scheduler() {
 			}
 		}
 	}
+	log.Info("Scheduler is stopped")
+}
+
+func StopScheduler() {
+	stopScheduler = true
 }
 
 func SendFailedDevicesStatus() {
@@ -648,6 +669,13 @@ func GetFirmwarePayload(modelId int, version string) []byte {
 	// fmt.Println(firmwareFileResponse.Version)
 	// fmt.Println(firmwareFileResponse.Firmware)
 	return firmwareFileResponse.Firmware
+}
+
+func ResetStorage() {
+	//reset storage
+	if err := storage.Reset(); err != nil {
+		log.Error(err)
+	}
 }
 
 func getC2ConfigFromToml() C2Config {

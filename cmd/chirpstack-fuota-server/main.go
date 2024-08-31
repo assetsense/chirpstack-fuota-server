@@ -258,6 +258,17 @@ func handleUdpMessage(message string) {
 			// 	log.Error("Initialise DB to Start Scheduler")
 			// }
 
+		} else if msg == "reset" {
+			//reste logic
+
+			api.CloseWSConnection()
+			api.CloseGrpcConnection()
+			api.ResetStorage()
+			api.StopScheduler()
+
+			state = 0
+			log.Info("Fuota reset is successfull")
+			SendUdpMessage("mgfuota,all,started")
 		}
 	}
 

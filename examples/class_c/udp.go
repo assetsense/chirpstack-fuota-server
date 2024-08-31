@@ -66,6 +66,14 @@ func main() {
 
 	time.Sleep(3 * time.Second)
 
+	message = []byte("mgmonitor,all,reset")
+	_, err = conn.Write(message)
+	if err != nil {
+		fmt.Println("Error sending message:", err)
+		return
+	}
+	return
+
 }
 
 // func main() {
