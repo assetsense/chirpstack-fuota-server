@@ -8,7 +8,7 @@ import (
 
 func main() {
 	// multicastAddrStr := "224.1.1.1:7002"
-	multicastAddrStr := "127.0.0.1:7002"
+	multicastAddrStr := "127.0.0.1:7003"
 
 	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
 	if err != nil {
@@ -22,58 +22,23 @@ func main() {
 	}
 	defer conn.Close()
 
-	message := []byte("mgmonitor,all,c2connect")
-	_, err = conn.Write(message)
-	if err != nil {
-		fmt.Println("Error sending message:", err)
-		return
-	}
-
-	fmt.Println("Message sent:", string(message))
-
+	// SendUdpMessage(conn, "mgmonitor,all,appinit")
 	time.Sleep(3 * time.Second)
 
-	message = []byte("mgmonitor,all,appinit")
-	_, err = conn.Write(message)
+	// SendUdpMessage(conn, "mgmonitor,all,dbready")
+
+	SendUdpMessage(conn, "mgmonitor,all,reset")
+
+}
+
+func SendUdpMessage(conn *net.UDPConn, msg string) {
+	message := []byte(msg)
+	_, err := conn.Write(message)
 	if err != nil {
 		fmt.Println("Error sending message:", err)
 		return
 	}
-
 	fmt.Println("Message sent:", string(message))
-
-	time.Sleep(3 * time.Second)
-
-	message = []byte("mgmonitor,all,dbready")
-	_, err = conn.Write(message)
-	if err != nil {
-		fmt.Println("Error sending message:", err)
-		return
-	}
-
-	fmt.Println("Message sent:", string(message))
-
-	time.Sleep(3 * time.Second)
-
-	message = []byte("mgmonitor,all,sysready")
-	_, err = conn.Write(message)
-	if err != nil {
-		fmt.Println("Error sending message:", err)
-		return
-	}
-
-	fmt.Println("Message sent:", string(message))
-
-	time.Sleep(3 * time.Second)
-
-	message = []byte("mgmonitor,all,reset")
-	_, err = conn.Write(message)
-	if err != nil {
-		fmt.Println("Error sending message:", err)
-		return
-	}
-	return
-
 }
 
 // func main() {

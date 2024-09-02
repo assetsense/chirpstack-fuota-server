@@ -87,3 +87,10 @@ func DeviceClient() api.DeviceServiceClient {
 func SetDeviceClient(c api.DeviceServiceClient) {
 	deviceClient = c
 }
+
+func CloseClientConn() {
+	if clientConn != nil {
+		clientConn.Close()
+		log.Info("Grpc Connection Closed")
+	}
+}

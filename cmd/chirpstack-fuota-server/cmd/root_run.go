@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -11,35 +12,31 @@ import (
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/api"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/config"
-	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/eventhandler"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 )
 
 func run(cmd *cobra.Command, args []string) error {
 	tasks := []func() error{
-		setLogLevel,                  //0
-		setSyslog,                    //1
-		setupStorage,                 //2
-		printStartMessage,            //3
-		setupEventHandler,            //4
-		setupApplicationServerClient, //5
-		setupAPI,                     //6
+		setLogLevel, //0
+		setSyslog,   //1
+		// setupStorage,
+		printStartMessage, //2
+		// setupEventHandler,
+		setupApplicationServerClient, //3
+		setupAPI,                     //4
 	}
 
 	for i, t := range tasks {
 		if err := t(); err != nil {
 			log.Error(err)
-			if i == 2 {
-				SendUdpMessage("mgfuota,all,2001:DB connection failed")
+			if i == 3 {
+				SendUdpMessage("mgfuota,all,2002:Chirpstack connection failed")
+				return errors.New("chirpstack connection failed")
 			} else if i == 4 {
-				SendUdpMessage("mgfuota,all,2002:Event handler setup failed")
-			} else if i == 5 {
-				SendUdpMessage("mgfuota,all,2003:Chirpstack connection failed")
-			} else if i == 6 {
-				SendUdpMessage("mgfuota,all,2004:Fuota grpc setup failed")
+				SendUdpMessage("mgfuota,all,2003:Fuota grpc setup failed")
+				return errors.New("fuota grpc setup failed")
 			}
 			// log.Error(err)
-			return nil
 		}
 	}
 	SendUdpMessage("mgfuota,all,appinitsuccess")
@@ -59,7 +56,7 @@ func printStartMessage() error {
 	return nil
 }
 
-func setupStorage() error {
+func SetupStorage() error {
 	if err := storage.Setup(&config.C); err != nil {
 		return fmt.Errorf("setup storage error: %w", err)
 		// return err
@@ -68,11 +65,11 @@ func setupStorage() error {
 }
 
 func setupEventHandler() error {
-	return nil
-	if err := eventhandler.Setup(&config.C); err != nil {
-		return fmt.Errorf("setup event-handler error: %w", err)
-		// return err
-	}
+
+	// if err := eventhandler.Setup(&config.C); err != nil {
+	// 	return fmt.Errorf("setup event-handler error: %w", err)
+	// 	// return err
+	// }
 	return nil
 }
 

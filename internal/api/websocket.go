@@ -25,12 +25,12 @@ import (
 	"github.com/brocaar/lorawan/applayer/multicastsetup"
 	fuota "github.com/chirpstack/chirpstack-fuota-server/v4/api/go"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/config"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/firmUpdateInfo"
+	pb "github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota/proto"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/jmoiron/sqlx"
-
-	pb "github.com/chirpstack/chirpstack-fuota-server/v4/internal/fuota/proto"
 )
 
 // type Config struct {
@@ -105,9 +105,13 @@ func InitGrpcConnection() {
 	dialOpts := []grpc.DialOption{
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
+		grpc.WithDisableRetry(),
 	}
 
-	GrpcConn, err = grpc.Dial("localhost:8070", dialOpts...)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	GrpcConn, err = grpc.DialContext(ctx, "localhost:8070", dialOpts...)
 	if err != nil {
 		panic(err)
 	}
@@ -671,11 +675,21 @@ func GetFirmwarePayload(modelId int, version string) []byte {
 	return firmwareFileResponse.Firmware
 }
 
-func ResetStorage() {
+func ResetStorage() error {
 	//reset storage
 	if err := storage.Reset(); err != nil {
 		log.Error(err)
+		return err
 	}
+	return nil
+}
+
+func InitializeDB() error {
+	if err := storage.Setup(&config.C); err != nil {
+		log.Error(err)
+		return err
+	}
+	return nil
 }
 
 func getC2ConfigFromToml() C2Config {

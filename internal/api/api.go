@@ -16,6 +16,8 @@ import (
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/config"
 )
 
+var gs *grpc.Server
+
 func Setup(conf *config.Config) error {
 	apiConf := conf.FUOTAServer.API
 
@@ -37,7 +39,7 @@ func Setup(conf *config.Config) error {
 		opts = append(opts, grpc.Creds(creds))
 	}
 
-	gs := grpc.NewServer(opts...)
+	gs = grpc.NewServer(opts...)
 	fuotaAPI := NewFUOTAServerAPI()
 	fuota.RegisterFuotaServerServiceServer(gs, fuotaAPI)
 
@@ -86,4 +88,11 @@ func getTransportCredentials(caCert, tlsCert, tlsKey string, verifyClientCert bo
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
 	}), nil
+}
+
+func CloseApiServer() {
+	if gs != nil {
+		gs.Stop()
+		log.Info("Api server is Closed")
+	}
 }

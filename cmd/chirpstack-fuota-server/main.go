@@ -11,6 +11,7 @@ import (
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/cmd/chirpstack-fuota-server/cmd"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/api"
+	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/grpclog"
 )
@@ -142,12 +143,16 @@ func ConnectToC2() error {
 
 }
 
-func InitializeDB() error {
+func InitializeApp() error {
 	err := cmd.Execute(version)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func InitializeDB() error {
+	return api.InitializeDB()
 }
 
 func StartScheduler() {
@@ -221,16 +226,18 @@ func handleUdpMessage(message string) {
 			if state == 0 {
 				err = ConnectToC2()
 				if err != nil {
-					SendUdpMessage("mgfuota,all,2005:C2WS connection failed")
+					SendUdpMessage("mgfuota,all,2001:C2WS connection failed")
+					state = 0
 				} else {
-					state = 1
 					SendUdpMessage("mgfuota,all,c2connectsuccess")
+					state = 1
 				}
 			}
 
 		} else if msg == "appinit" {
+			// if true {
 			if state == 1 {
-				err = InitializeDB()
+				err = InitializeApp()
 				if err != nil {
 					state = 1
 				} else {
@@ -240,9 +247,16 @@ func handleUdpMessage(message string) {
 			// api.SaveState("dbready")
 
 		} else if msg == "dbready" {
+			// if true {
 			if state == 2 {
-				SendUdpMessage("mgfuota,all,dbreadysuccess")
-				state = 3
+				err = InitializeDB()
+				if err != nil {
+					SendUdpMessage("mgfuota,all,2004: DB connection failed")
+					state = 2
+				} else {
+					SendUdpMessage("mgfuota,all,dbreadysuccess")
+					state = 3
+				}
 			}
 
 		} else if msg == "sysready" {
@@ -261,17 +275,31 @@ func handleUdpMessage(message string) {
 		} else if msg == "reset" {
 			//reste logic
 
-			api.CloseWSConnection()
-			api.CloseGrpcConnection()
-			api.ResetStorage()
-			api.StopScheduler()
+			err := ResetFuota()
+			if err != nil {
+				log.Info("Failed to reset database")
+			} else {
+				state = 0
+				log.Info("Fuota reset is successfull")
+				SendUdpMessage("mgfuota,all,started")
+			}
 
-			state = 0
-			log.Info("Fuota reset is successfull")
-			SendUdpMessage("mgfuota,all,started")
 		}
 	}
 
+}
+
+func ResetFuota() error {
+	api.CloseWSConnection()
+	api.CloseGrpcConnection()
+	err := api.ResetStorage()
+	api.CloseApiServer()
+	as.CloseClientConn()
+	api.StopScheduler()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func SendUdpMessage(message string) {

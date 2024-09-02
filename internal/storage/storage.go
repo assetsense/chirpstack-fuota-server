@@ -58,10 +58,44 @@ func Setup(conf *config.Config) error {
 }
 
 func Reset() error {
-	if err := MigrateDrop(DB()); err != nil {
+	if db == nil {
+		return nil
+	}
+	if err := MigrateDown(DB()); err != nil {
 		return err
 	}
+	db.Close()
+	return nil
+}
 
+func DropAll(db *sqlx.DB) error {
+	indexes := []string{
+		"DROP INDEX IF EXISTS idx_deployment_log_dev_eui;",
+		"DROP INDEX IF EXISTS idx_deployment_log_deployment_id;",
+	}
+
+	for _, query := range indexes {
+		if _, err := db.Exec(query); err != nil {
+			log.Fatalf("Failed to drop index: %v", err)
+		} else {
+			fmt.Println("Index dropped successfully.")
+		}
+	}
+
+	// Drop tables
+	tables := []string{
+		"DROP TABLE IF EXISTS chirpstack.deployment_log;",
+		"DROP TABLE IF EXISTS chirpstack.deployment_device;",
+		"DROP TABLE IF EXISTS chirpstack.deployment;",
+	}
+
+	for _, query := range tables {
+		if _, err := db.Exec(query); err != nil {
+			log.Fatalf("Failed to drop table: %v", err)
+		} else {
+			fmt.Println("Table dropped successfully.")
+		}
+	}
 	return nil
 }
 
