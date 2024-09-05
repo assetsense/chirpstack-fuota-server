@@ -163,9 +163,9 @@ func StartScheduler() {
 }
 
 func InitUdpConnection() {
-
-	multicastip := api.C2config.MulticastIP
-	multicastport := api.C2config.MulticastPort
+	var C2config api.C2Config = api.GetC2ConfigFromToml()
+	multicastip := C2config.MulticastIP
+	multicastport := C2config.MulticastPort
 	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)
 
 	multicastAddr, err = net.ResolveUDPAddr("udp", multicastAddrStr)
@@ -283,7 +283,17 @@ func handleUdpMessage(message string) {
 				log.Info("Fuota reset is successfull")
 				SendUdpMessage("mgfuota,all,started")
 			}
+		} else if msg == "configchange" {
+			//reste logic
 
+			err := RefreshFuota()
+			if err != nil {
+				log.Info("Failed to reset database")
+			} else {
+				state = 0
+				log.Info("Fuota reset is successfull")
+				SendUdpMessage("mgfuota,all,started")
+			}
 		}
 	}
 
@@ -293,6 +303,19 @@ func ResetFuota() error {
 	api.CloseWSConnection()
 	api.CloseGrpcConnection()
 	err := api.ResetStorage()
+	api.CloseApiServer()
+	as.CloseClientConn()
+	api.StopScheduler()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func RefreshFuota() error {
+	api.CloseWSConnection()
+	api.CloseGrpcConnection()
+	err := api.CloseDBConn()
 	api.CloseApiServer()
 	as.CloseClientConn()
 	api.StopScheduler()

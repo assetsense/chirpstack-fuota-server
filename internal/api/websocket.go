@@ -97,8 +97,6 @@ var WSConn *websocket.Conn
 var GrpcConn *grpc.ClientConn
 var err error
 
-var C2config C2Config = getC2ConfigFromToml()
-var applicationId string = getApplicationId()
 var stopScheduler bool = false
 
 func InitGrpcConnection() {
@@ -126,6 +124,7 @@ func CloseGrpcConnection() {
 }
 
 func InitWSConnection() error {
+	var C2config C2Config = GetC2ConfigFromToml()
 	//creating authentication string
 	authString := fmt.Sprintf("%s:%s", C2config.Username, C2config.Password)
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(authString))
@@ -213,6 +212,7 @@ func ReceiveMessageDummyForFirmware() []byte {
 }
 
 func Scheduler() {
+	var C2config C2Config = GetC2ConfigFromToml()
 	stopScheduler = false
 	frequency, err := ParseFrequency(C2config.Frequency)
 	if err != nil {
@@ -299,7 +299,7 @@ func SendFailedDevicesStatus() {
 }
 
 func SendFailedDevicesStatusToC2(deviceCode string, deviceVersion string, modelVersion string) {
-
+	var C2config C2Config = GetC2ConfigFromToml()
 	fuotaUpdate := &pb.FuotaUpdate{
 		DeviceCode:      deviceCode,
 		Timestamp:       time.Now().Unix(),
@@ -398,6 +398,8 @@ func CheckForFirmwareUpdate() {
 }
 
 func handleMessage(message string) {
+	var C2config C2Config = GetC2ConfigFromToml()
+	var applicationId string = getApplicationId()
 	var response FirmwareUpdateResponse
 	err := json.Unmarshal([]byte(message), &response)
 	if err != nil {
@@ -684,6 +686,15 @@ func ResetStorage() error {
 	return nil
 }
 
+func CloseDBConn() error {
+	//reset storage
+	if err := storage.Reset(); err != nil {
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
 func InitializeDB() error {
 	if err := storage.Setup(&config.C); err != nil {
 		log.Error(err)
@@ -692,7 +703,7 @@ func InitializeDB() error {
 	return nil
 }
 
-func getC2ConfigFromToml() C2Config {
+func GetC2ConfigFromToml() C2Config {
 
 	viper.SetConfigName("c2intbootconfig")
 	viper.SetConfigType("toml")
@@ -788,6 +799,7 @@ func GetStatus(id uuid.UUID) {
 }
 
 func SendUdpMessage(message string) {
+	var C2config C2Config = GetC2ConfigFromToml()
 	multicastip := C2config.MulticastIP
 	multicastport := C2config.MulticastPort
 	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)

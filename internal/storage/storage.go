@@ -68,6 +68,17 @@ func Reset() error {
 	return nil
 }
 
+func CloseConn() error {
+	if db == nil {
+		return nil
+	}
+	if err := db.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func DropAll(db *sqlx.DB) error {
 	indexes := []string{
 		"DROP INDEX IF EXISTS idx_deployment_log_dev_eui;",

@@ -90,8 +90,9 @@ func setupAPI() error {
 }
 
 func SendUdpMessage(message string) {
-	multicastip := api.C2config.MulticastIP
-	multicastport := api.C2config.MulticastPort
+	var C2config api.C2Config = api.GetC2ConfigFromToml()
+	multicastip := C2config.MulticastIP
+	multicastport := C2config.MulticastPort
 	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)
 
 	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
