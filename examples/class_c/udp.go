@@ -35,10 +35,10 @@ func main() {
 	// SendUdpMessage(conn, "mgmonitor,all,sysready")
 	// time.Sleep(3 * time.Second)
 
-	SendUdpMessage(conn, "mgmonitor,all,reset")
+	// SendUdpMessage(conn, "mgmonitor,all,reset")
 	// time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,reset")
+	SendUdpMessage(conn, "mgmonitor,all,configchange")
 
 }
 

@@ -701,8 +701,7 @@ func ResetStorage() error {
 }
 
 func CloseDBConn() error {
-	//reset storage
-	if err := storage.Reset(); err != nil {
+	if err := storage.CloseConn(); err != nil {
 		log.Error(err)
 		return err
 	}
