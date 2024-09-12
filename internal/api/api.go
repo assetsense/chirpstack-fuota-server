@@ -94,5 +94,7 @@ func CloseApiServer() {
 	if gs != nil {
 		gs.Stop()
 		log.Info("Api server is Closed")
+	} else {
+		log.Info("Api server is not up")
 	}
 }

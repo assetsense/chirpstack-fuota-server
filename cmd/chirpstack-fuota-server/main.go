@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/cmd/chirpstack-fuota-server/cmd"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/api"
@@ -129,9 +130,9 @@ func main() {
 	// ConnectToC2()
 	// InitializeDB()
 	// StartScheduler()
-
-	SendUdpMessage("mgfuota,all,started")
 	go ReceiveUdpMessages()
+	time.Sleep(10 * time.Second)
+	SendUdpMessage("mgfuota,all,started")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

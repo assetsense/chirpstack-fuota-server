@@ -10,10 +10,24 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/rakyll/statik/fs"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/config"
 	_ "github.com/chirpstack/chirpstack-fuota-server/v4/internal/migrations"
 )
+
+type C2Config struct {
+	ServerURL     string
+	Username      string
+	Password      string
+	Frequency     string
+	LastSyncTime  string
+	FuotaInterval int64
+	SessionTime   int
+	MulticastIP   string
+	MulticastPort int
+	Schema        string
+}
 
 var (
 	db *sqlx.DB
@@ -48,13 +62,82 @@ func Setup(conf *config.Config) error {
 
 	db = d
 
-	if conf.PostgreSQL.Automigrate {
-		if err := MigrateUp(DB()); err != nil {
-			return err
-		}
+	// if conf.PostgreSQL.Automigrate {
+	// 	if err := MigrateUp(DB()); err != nil {
+	// 		return err
+	// 	}
+	// }
+	InitDB()
+	return nil
+}
+
+func InitDB() {
+	var c2config C2Config = GetC2ConfigFromToml()
+	schema := `
+    CREATE SCHEMA IF NOT EXISTS ` + c2config.Schema + ` ;
+
+    CREATE TABLE IF NOT EXISTS ` + c2config.Schema + `.deployment (
+        id UUID PRIMARY KEY NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        mc_group_setup_completed_at TIMESTAMPTZ NULL,
+        mc_session_completed_at TIMESTAMPTZ NULL,
+        frag_session_setup_completed_at TIMESTAMPTZ NULL,
+        enqueue_completed_at TIMESTAMPTZ NULL,
+        frag_status_completed_at TIMESTAMPTZ NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ` + c2config.Schema + `.deployment_device (
+        deployment_id UUID NOT NULL REFERENCES ` + c2config.Schema + `.deployment ON DELETE CASCADE,
+        dev_eui BYTEA NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        mc_group_setup_completed_at TIMESTAMPTZ NULL,
+        mc_session_completed_at TIMESTAMPTZ NULL,
+        frag_session_setup_completed_at TIMESTAMPTZ NULL,
+        frag_status_completed_at TIMESTAMPTZ NULL,
+        PRIMARY KEY (deployment_id, dev_eui)
+    );
+
+    CREATE TABLE IF NOT EXISTS ` + c2config.Schema + `.deployment_log (
+        id BIGSERIAL PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL,
+        deployment_id UUID NOT NULL REFERENCES ` + c2config.Schema + `.deployment ON DELETE CASCADE,
+        dev_eui BYTEA NOT NULL,
+        f_port SMALLINT NOT NULL,
+        command VARCHAR(50) NOT NULL,
+        fields HSTORE
+    );
+
+    CREATE TABLE IF NOT EXISTS ` + c2config.Schema + `.device_profile (
+        profileId BIGINT PRIMARY KEY,
+        region VARCHAR(255),
+        macVersion VARCHAR(255),
+        regionParameter VARCHAR(255)
+    );
+
+    CREATE TABLE IF NOT EXISTS ` + c2config.Schema + `.device (
+        deviceCode VARCHAR(255) PRIMARY KEY,
+        modelId BIGINT,
+        profileId BIGINT,
+        firmwareVersion VARCHAR(255),
+        status BIGINT,
+        firmwareUpdateFailed BOOLEAN,
+        attempts BIGINT,
+        CONSTRAINT fk_device_profile FOREIGN KEY (profileId) REFERENCES ` + c2config.Schema + `.device_profile(profileId)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_deployment_log_deployment_id ON ` + c2config.Schema + `.deployment_log(deployment_id);
+    CREATE INDEX IF NOT EXISTS idx_deployment_log_dev_eui ON ` + c2config.Schema + `.deployment_log(dev_eui);
+    `
+
+	// Execute the SQL commands
+	_, err := db.Exec(schema)
+	if err != nil {
+		log.Fatalf("Failed to create tables & indexes in DB: %v", err)
 	}
 
-	return nil
+	log.Println("Tables and indexes created successfully")
 }
 
 func Reset() error {
@@ -79,7 +162,13 @@ func CloseConn() error {
 	return nil
 }
 
-func DropAll(db *sqlx.DB) error {
+func DropAll() error {
+	var c2config C2Config = GetC2ConfigFromToml()
+
+	if db == nil {
+		log.Info("db is not connected")
+		return nil
+	}
 	indexes := []string{
 		"DROP INDEX IF EXISTS idx_deployment_log_dev_eui;",
 		"DROP INDEX IF EXISTS idx_deployment_log_deployment_id;",
@@ -88,25 +177,24 @@ func DropAll(db *sqlx.DB) error {
 	for _, query := range indexes {
 		if _, err := db.Exec(query); err != nil {
 			log.Fatalf("Failed to drop index: %v", err)
-		} else {
-			fmt.Println("Index dropped successfully.")
 		}
 	}
-
+	log.Debug("Index dropped successfully.")
 	// Drop tables
 	tables := []string{
-		"DROP TABLE IF EXISTS chirpstack.deployment_log;",
-		"DROP TABLE IF EXISTS chirpstack.deployment_device;",
-		"DROP TABLE IF EXISTS chirpstack.deployment;",
+		`DROP TABLE IF EXISTS ` + c2config.Schema + `.deployment_log;`,
+		`DROP TABLE IF EXISTS ` + c2config.Schema + `.deployment_device;`,
+		`DROP TABLE IF EXISTS ` + c2config.Schema + `.deployment;`,
+		`DROP TABLE IF EXISTS ` + c2config.Schema + `.device;`,
+		`DROP TABLE IF EXISTS ` + c2config.Schema + `.device_profile;`,
 	}
 
 	for _, query := range tables {
 		if _, err := db.Exec(query); err != nil {
 			log.Fatalf("Failed to drop table: %v", err)
-		} else {
-			fmt.Println("Table dropped successfully.")
 		}
 	}
+	log.Debug("Table dropped successfully.")
 	return nil
 }
 
@@ -245,4 +333,67 @@ func Transaction(f func(tx sqlx.Ext) error) error {
 		return fmt.Errorf("storage: stransaction commit error: %w", err)
 	}
 	return nil
+}
+
+func GetC2ConfigFromToml() C2Config {
+
+	viper.SetConfigName("c2intbootconfig")
+	viper.SetConfigType("toml")
+	viper.AddConfigPath("/usr/local/bin")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Fatalf("c2intbootconfig.toml file not found: %v", err)
+		} else {
+			log.Fatalf("Error reading c2intbootconfig.toml file: %v", err)
+		}
+	}
+
+	var c2config C2Config
+
+	c2config.Username = viper.GetString("c2App.username")
+	if c2config.Username == "" {
+		log.Fatal("username not found in c2intbootconfig.toml file")
+	}
+
+	c2config.Password = viper.GetString("c2App.password")
+	if c2config.Password == "" {
+		log.Fatal("password not found in c2intbootconfig.toml file")
+	}
+
+	c2config.ServerURL = viper.GetString("c2App.serverUrl")
+	if c2config.ServerURL == "" {
+		log.Fatal("serverUrl not found in c2intbootconfig.toml file")
+	}
+
+	c2config.Frequency = viper.GetString("c2App.frequency")
+	if c2config.Frequency == "" {
+		log.Fatal("frequency not found in c2intbootconfig.toml file")
+	}
+
+	c2config.FuotaInterval = viper.GetInt64("c2App.fuotainterval")
+	if c2config.FuotaInterval == 0 {
+		log.Fatal("fuotainterval not found in c2intbootconfig.toml file")
+	}
+	c2config.SessionTime = viper.GetInt("c2App.sessiontime")
+	if c2config.SessionTime == 0 {
+		log.Fatal("sessiontime not found in c2intbootconfig.toml file")
+	}
+
+	c2config.MulticastIP = viper.GetString("c2App.multicastip")
+	if c2config.MulticastIP == "" {
+		log.Fatal("multicastip not found in c2intbootconfig.toml file")
+	}
+
+	c2config.MulticastPort = viper.GetInt("c2App.multicastport")
+	if c2config.MulticastPort == 0 {
+		log.Fatal("multicastport not found in c2intbootconfig.toml file")
+	}
+
+	c2config.Schema = viper.GetString("database.schema")
+	if c2config.Schema == "" {
+		log.Fatal("schema not found in c2intbootconfig.toml file")
+	}
+
+	return c2config
 }

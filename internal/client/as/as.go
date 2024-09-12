@@ -91,6 +91,8 @@ func SetDeviceClient(c api.DeviceServiceClient) {
 func CloseClientConn() {
 	if clientConn != nil {
 		clientConn.Close()
-		log.Info("Grpc Connection Closed")
+		log.Info("Chirpstack client Connection Closed")
+	} else {
+		log.Info("Chirpstack client is not connected")
 	}
 }

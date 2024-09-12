@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"time"
 )
 
 func main() {
@@ -22,12 +21,24 @@ func main() {
 	}
 	defer conn.Close()
 
+	// // ReceiveUdpMessages()
+
+	// SendUdpMessage(conn, "mgmonitor,all,c2connect")
+	// time.Sleep(3 * time.Second)
+
 	// SendUdpMessage(conn, "mgmonitor,all,appinit")
-	time.Sleep(3 * time.Second)
+	// time.Sleep(3 * time.Second)
 
 	// SendUdpMessage(conn, "mgmonitor,all,dbready")
+	// time.Sleep(3 * time.Second)
+
+	// SendUdpMessage(conn, "mgmonitor,all,sysready")
+	// time.Sleep(3 * time.Second)
 
 	SendUdpMessage(conn, "mgmonitor,all,reset")
+	// time.Sleep(3 * time.Second)
+
+	// SendUdpMessage(conn, "mgmonitor,all,reset")
 
 }
 
@@ -39,6 +50,36 @@ func SendUdpMessage(conn *net.UDPConn, msg string) {
 		return
 	}
 	fmt.Println("Message sent:", string(message))
+}
+
+func ReceiveUdpMessages() {
+	multicastAddrStr := "224.1.1.1:7003"
+
+	multicastAddr, err := net.ResolveUDPAddr("udp", multicastAddrStr)
+	if err != nil {
+		fmt.Println("Error resolving UDP address:", err)
+	}
+	conn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
+	if err != nil {
+		fmt.Println("Error listening:", err)
+		return
+	}
+	defer conn.Close()
+
+	fmt.Println("Listening for UDP packets on ", multicastAddr)
+
+	buffer := make([]byte, 1024)
+	for {
+		n, src, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			fmt.Println("Error reading from UDP:", err)
+			continue
+		}
+		message := string(buffer[:n])
+		fmt.Println("Received from ", src, ":", message)
+
+		// go handleUdpMessage(message)
+	}
 }
 
 // func main() {

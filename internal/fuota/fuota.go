@@ -24,6 +24,7 @@ import (
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/client/as"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/firmUpdateInfo"
 	"github.com/chirpstack/chirpstack-fuota-server/v4/internal/storage"
+
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"github.com/chirpstack/chirpstack/api/go/v4/common"
 	"github.com/chirpstack/chirpstack/api/go/v4/integration"

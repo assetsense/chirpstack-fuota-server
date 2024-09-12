@@ -120,6 +120,8 @@ func CloseGrpcConnection() {
 	if GrpcConn != nil {
 		GrpcConn.Close()
 		log.Info("Grpc Connection Closed")
+	} else {
+		log.Info("Grpc is not connected")
 	}
 }
 
@@ -156,6 +158,7 @@ func InitWSConnection() error {
 
 func CloseWSConnection() {
 	if WSConn == nil {
+		log.Info("C2WS is not connected")
 		return
 	}
 	err = WSConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
@@ -233,16 +236,25 @@ func Scheduler() {
 	retries := 2
 	for {
 		if stopScheduler == true {
+			log.Info("Scheduler is stopped")
 			break
 		}
 
 		select {
 		case <-ticker.C:
 			retries = 2
+			if stopScheduler == true {
+				log.Info("Scheduler is stopped")
+				break
+			}
 			CheckForFirmwareUpdate()
 		case <-retryTicker.C:
 			if retries > 0 {
 				retries--
+				if stopScheduler == true {
+					log.Info("Scheduler is stopped")
+					break
+				}
 				CheckForFirmwareUpdate()
 			} else if retries == 0 {
 				retries--
@@ -250,7 +262,7 @@ func Scheduler() {
 			}
 		}
 	}
-	log.Info("Scheduler is stopped")
+
 }
 
 func StopScheduler() {
@@ -679,9 +691,11 @@ func GetFirmwarePayload(modelId int, version string) []byte {
 
 func ResetStorage() error {
 	//reset storage
-	if err := storage.Reset(); err != nil {
+	if err := storage.DropAll(); err != nil {
 		log.Error(err)
 		return err
+	} else {
+		log.Info("Db reset done and connection closed")
 	}
 	return nil
 }
