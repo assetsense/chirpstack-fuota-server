@@ -289,11 +289,10 @@ func handleUdpMessage(message string) {
 
 			err := RefreshFuota()
 			if err != nil {
-				log.Info("Failed to reset database")
+				log.Info("Failed to config change")
 			} else {
-				state = 0
-				log.Info("Fuota reset is successfull")
-				SendUdpMessage("mgfuota,all,started")
+				log.Info("config change is successfull")
+				SendUdpMessage("mgfuota,all,configchangesuccess")
 			}
 		}
 	}
