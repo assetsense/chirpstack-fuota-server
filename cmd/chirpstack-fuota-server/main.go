@@ -323,6 +323,22 @@ func RefreshFuota() error {
 	if err != nil {
 		return err
 	}
+
+	if state == 1 {
+		ConnectToC2()
+	} else if state == 2 {
+		ConnectToC2()
+		InitializeApp()
+	} else if state == 3 {
+		ConnectToC2()
+		InitializeApp()
+		InitializeDB()
+	} else if state == 4 {
+		ConnectToC2()
+		InitializeApp()
+		InitializeDB()
+		StartScheduler()
+	}
 	return nil
 }
 
