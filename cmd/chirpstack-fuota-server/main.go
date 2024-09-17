@@ -225,6 +225,7 @@ func handleUdpMessage(message string) {
 
 		if msg == "c2connect" {
 			if state == 0 {
+				state = 1
 				err = ConnectToC2()
 				if err != nil {
 					SendUdpMessage("mgfuota,all,2001:C2WS connection failed")
@@ -238,6 +239,7 @@ func handleUdpMessage(message string) {
 		} else if msg == "appinit" {
 			// if true {
 			if state == 1 {
+				state = 2
 				err = InitializeApp()
 				if err != nil {
 					state = 1
@@ -250,6 +252,7 @@ func handleUdpMessage(message string) {
 		} else if msg == "dbready" {
 			// if true {
 			if state == 2 {
+				state = 3
 				err = InitializeDB()
 				if err != nil {
 					SendUdpMessage("mgfuota,all,2004: DB connection failed")

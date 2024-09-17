@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 func main() {
@@ -23,22 +24,22 @@ func main() {
 
 	// // ReceiveUdpMessages()
 
-	// SendUdpMessage(conn, "mgmonitor,all,c2connect")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,c2connect")
+	time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,appinit")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,appinit")
+	time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,dbready")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,dbready")
+	time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,sysready")
+	SendUdpMessage(conn, "mgmonitor,all,sysready")
 	// time.Sleep(3 * time.Second)
 
 	// SendUdpMessage(conn, "mgmonitor,all,reset")
 	// time.Sleep(3 * time.Second)
 
-	SendUdpMessage(conn, "mgmonitor,all,configchange")
+	// SendUdpMessage(conn, "mgmonitor,all,configchange")
 
 }
 
