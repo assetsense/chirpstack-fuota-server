@@ -454,7 +454,6 @@ func handleMessage(message string) {
 
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
-
 				readyDevices := prepareDevicesForUpdate(devices, model.Version)
 
 				if len(readyDevices) == 0 {
@@ -484,13 +483,11 @@ func handleMessage(message string) {
 				<-timer.C //waiting until the timestamp hits
 
 				createDeploymentRequest(model.Version, devices, applicationId, region, payload)
-				break
 			}
 			return nil
 		}); err != nil {
 			log.Fatal(err)
 		}
-		break
 	}
 }
 
