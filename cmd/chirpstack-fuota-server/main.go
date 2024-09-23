@@ -166,7 +166,8 @@ func StartScheduler() {
 func InitUdpConnection() {
 	var C2config api.C2Config = api.GetC2ConfigFromToml()
 	if C2config.MulticastIP == "" {
-		select {}
+		for {
+		}
 	}
 	multicastip := C2config.MulticastIP
 	multicastport := C2config.MulticastPort

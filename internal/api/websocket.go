@@ -760,7 +760,7 @@ func GetC2ConfigFromToml() C2Config {
 
 	c2config.MulticastIP = viper.GetString("c2App.multicastip")
 	if c2config.MulticastIP == "" {
-		log.Fatal("multicastip not found in c2intbootconfig.toml file")
+		log.Info("multicastip not found in c2intbootconfig.toml file")
 	}
 
 	c2config.MulticastPort = viper.GetInt("c2App.multicastport")
