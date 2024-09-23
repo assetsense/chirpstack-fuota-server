@@ -230,7 +230,7 @@ func Scheduler() {
 
 	defer retryTicker.Stop()
 
-	SendUdpMessage("mgfuota,all,sysreadysuccess")
+	SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
 	CheckForFirmwareUpdate()
 
 	retries := 2

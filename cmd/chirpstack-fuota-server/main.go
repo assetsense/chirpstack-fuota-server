@@ -132,7 +132,7 @@ func main() {
 	// StartScheduler()
 	go ReceiveUdpMessages()
 	time.Sleep(10 * time.Second)
-	SendUdpMessage("mgfuota,all,started")
+	SendUdpMessage("mgfuota,mgmonitor,started")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -165,6 +165,9 @@ func StartScheduler() {
 
 func InitUdpConnection() {
 	var C2config api.C2Config = api.GetC2ConfigFromToml()
+	if C2config.MulticastIP == "" {
+		select {}
+	}
 	multicastip := C2config.MulticastIP
 	multicastport := C2config.MulticastPort
 	multicastAddrStr := multicastip + ":" + strconv.Itoa(multicastport)
@@ -228,10 +231,10 @@ func handleUdpMessage(message string) {
 				state = 1
 				err = ConnectToC2()
 				if err != nil {
-					SendUdpMessage("mgfuota,all,2001:C2WS connection failed")
+					SendUdpMessage("mgfuota,mgmonitor,2001:C2WS connection failed")
 					state = 0
 				} else {
-					SendUdpMessage("mgfuota,all,c2connectsuccess")
+					SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
 					state = 1
 				}
 			}
@@ -255,10 +258,10 @@ func handleUdpMessage(message string) {
 				state = 3
 				err = InitializeDB()
 				if err != nil {
-					SendUdpMessage("mgfuota,all,2004: DB connection failed")
+					SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
 					state = 2
 				} else {
-					SendUdpMessage("mgfuota,all,dbreadysuccess")
+					SendUdpMessage("mgfuota,mgmonitor,dbreadysuccess")
 					state = 3
 				}
 			}
@@ -285,7 +288,7 @@ func handleUdpMessage(message string) {
 			} else {
 				state = 0
 				log.Info("Fuota reset is successfull")
-				SendUdpMessage("mgfuota,all,started")
+				SendUdpMessage("mgfuota,mgmonitor,started")
 			}
 		} else if msg == "configchange" {
 			//reste logic
@@ -295,8 +298,10 @@ func handleUdpMessage(message string) {
 				log.Info("Failed to config change")
 			} else {
 				log.Info("config change is successfull")
-				SendUdpMessage("mgfuota,all,configchangesuccess")
+				SendUdpMessage("mgfuota,mgmonitor,configchangesuccess")
 			}
+		} else if msg == "hello" {
+			SendUdpMessage("mgfuota,mgmonitor,hello")
 		}
 	}
 
