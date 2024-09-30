@@ -167,6 +167,7 @@ func InitUdpConnection() {
 	var C2config api.C2Config = api.GetC2ConfigFromToml()
 	if C2config.MulticastIP == "" {
 		for {
+			time.Sleep(1 * time.Hour)
 		}
 	}
 	multicastip := C2config.MulticastIP
@@ -232,7 +233,7 @@ func handleUdpMessage(message string) {
 				state = 1
 				err = ConnectToC2()
 				if err != nil {
-					SendUdpMessage("mgfuota,mgmonitor,2001:C2WS connection failed")
+					SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
 					state = 0
 				} else {
 					SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
@@ -259,7 +260,8 @@ func handleUdpMessage(message string) {
 				state = 3
 				err = InitializeDB()
 				if err != nil {
-					SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
+					SendUdpMessage("mgfuota,mgmonitor,dbreadyfail")
+					// SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
 					state = 2
 				} else {
 					SendUdpMessage("mgfuota,mgmonitor,dbreadysuccess")

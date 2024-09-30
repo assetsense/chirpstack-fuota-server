@@ -24,7 +24,7 @@ func main() {
 
 	// // ReceiveUdpMessages()
 
-	SendUdpMessage(conn, "mgmonitor,all,hello")
+	SendUdpMessage(conn, "mgmonitor,all,c2connect")
 	time.Sleep(3 * time.Second)
 
 	// SendUdpMessage(conn, "mgmonitor,all,appinit")
