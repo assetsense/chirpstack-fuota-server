@@ -121,7 +121,6 @@ func main() {
 	// return
 
 	InitUdpConnection()
-	// state := api.LoadState()
 
 	// if state == "dbready" {
 	// 	log.Println("Setting to previous state:", state)
@@ -131,12 +130,127 @@ func main() {
 	// InitializeDB()
 	// StartScheduler()
 	go ReceiveUdpMessages()
-	time.Sleep(10 * time.Second)
-	SendUdpMessage("mgfuota,mgmonitor,started")
+	time.Sleep(3 * time.Second)
+	GetToPreviousState()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	log.WithField("signal", <-sigChan).Info("signal received, stopping")
+}
+
+func GetToPreviousState() {
+	prevState := api.LoadState()
+	log.Info("Loading fuota to previous state:" + prevState)
+	if prevState == "" { //state Null
+		state = 0
+		SendUdpMessage("mgfuota,mgmonitor,started")
+
+	} else if prevState == "started" { //state started
+		state = 0
+		SendUdpMessage("mgfuota,mgmonitor,started")
+
+	} else if prevState == "c2connected" { //state c2connected
+		state = 1
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+		} else {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+	} else if prevState == "dbready" { //state dbready
+		state = 1
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+			return
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+		err = InitializeApp()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+			state = 1
+			return
+		} else {
+			SendUdpMessage("mgfuota,mgmonitor,appinitsuccess")
+			state = 2
+		}
+	} else if prevState == "dbsynced" { //state dbsynced
+		state = 1
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+			return
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+		err = InitializeApp()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+			state = 1
+			return
+		} else {
+			state = 2
+		}
+
+		err = InitializeDB()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,dbreadyfail")
+			// SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
+			state = 2
+			return
+		} else {
+			SendUdpMessage("mgfuota,mgmonitor,dbreadysuccess")
+			state = 3
+		}
+
+	} else if prevState == "running" {
+		state = 1
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+			return
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+		err = InitializeApp()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+			state = 1
+			return
+		} else {
+			state = 2
+		}
+
+		err = InitializeDB()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,dbreadyfail")
+			// SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
+			state = 2
+			return
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,dbreadysuccess")
+			state = 3
+		}
+		state = 4
+		SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
+		StartScheduler()
+	} else {
+		state = 0
+		SendUdpMessage("mgfuota,mgmonitor,started")
+	}
 }
 
 func ConnectToC2() error {
@@ -247,8 +361,10 @@ func handleUdpMessage(message string) {
 				state = 2
 				err = InitializeApp()
 				if err != nil {
+					SendUdpMessage("mgfuota,mgmonitor,appinitfail")
 					state = 1
 				} else {
+					SendUdpMessage("mgfuota,mgmonitor,appinitsuccess")
 					state = 2
 				}
 			}
@@ -272,6 +388,7 @@ func handleUdpMessage(message string) {
 		} else if msg == "sysready" {
 			if state == 3 {
 				state = 4
+				SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
 				StartScheduler()
 			}
 			// api.SaveState("sysready")
@@ -335,18 +452,97 @@ func RefreshFuota() error {
 	}
 
 	if state == 1 {
-		ConnectToC2()
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+		} else {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
 	} else if state == 2 {
-		ConnectToC2()
-		InitializeApp()
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+			return err
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+		err = InitializeApp()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+			state = 1
+			return err
+		} else {
+			SendUdpMessage("mgfuota,mgmonitor,appinitsuccess")
+			state = 2
+		}
 	} else if state == 3 {
-		ConnectToC2()
-		InitializeApp()
-		InitializeDB()
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+			return err
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+		err = InitializeApp()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+			state = 1
+			return err
+		} else {
+			state = 2
+		}
+
+		err = InitializeDB()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,dbreadyfail")
+			// SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
+			state = 2
+			return err
+		} else {
+			SendUdpMessage("mgfuota,mgmonitor,dbreadysuccess")
+			state = 3
+		}
+
 	} else if state == 4 {
-		ConnectToC2()
-		InitializeApp()
-		InitializeDB()
+		err = ConnectToC2()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,c2connectfail")
+			state = 0
+			return err
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,c2connectsuccess")
+			state = 1
+		}
+
+		err = InitializeApp()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+			state = 1
+			return err
+		} else {
+			state = 2
+		}
+
+		err = InitializeDB()
+		if err != nil {
+			SendUdpMessage("mgfuota,mgmonitor,dbreadyfail")
+			// SendUdpMessage("mgfuota,mgmonitor,2004: DB connection failed")
+			state = 2
+			return err
+		} else {
+			// SendUdpMessage("mgfuota,mgmonitor,dbreadysuccess")
+			state = 3
+		}
+		state = 4
+		SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
 		StartScheduler()
 	}
 	return nil

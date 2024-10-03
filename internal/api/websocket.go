@@ -140,18 +140,18 @@ func InitWSConnection() error {
 	// websocketURL := getC2serverUrl()
 	// headers.Set("Authorization", "Basic "+encodedAuth)
 
-	// for {
-	WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
-	if err != nil {
-		log.Error("Error C2", err)
-		// time.Sleep(2 * time.Second)
-		// continue // Retry connection in
-		return err
+	for {
+		WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
+		if err != nil {
+			log.Error("Error C2", err)
+			time.Sleep(2 * time.Second)
+			continue // Retry connection in
+			// return err
+		}
+		// SendUdpMessage("mgfuota,all,c2connectsuccess")
+		log.Info("Websocket Connection Established")
+		break
 	}
-	// SendUdpMessage("mgfuota,all,c2connectsuccess")
-	log.Info("Websocket Connection Established")
-	// break
-	// }
 	return nil
 
 }
@@ -174,6 +174,8 @@ func SendWSMessage(message string) {
 	err := WSConn.WriteMessage(websocket.TextMessage, []byte(message))
 	if err != nil {
 		log.Fatal("Write error:", err)
+		InitWSConnection()
+		SendUdpMessage(message)
 	}
 	log.Info("Websocket Message Sent: " + message)
 }
@@ -182,6 +184,8 @@ func ReceiveWSMessage() string {
 	_, message, err := WSConn.ReadMessage()
 	if err != nil {
 		log.Fatal("Read error:", err)
+		InitWSConnection()
+		return ReceiveWSMessage()
 	}
 	messageStr := string(message)
 	log.Info("Websocket Message received: " + messageStr)
@@ -192,6 +196,8 @@ func ReceiveWSMessageBinary() []byte {
 	_, message, err := WSConn.ReadMessage()
 	if err != nil {
 		log.Fatal("Read error:", err)
+		InitWSConnection()
+		return ReceiveWSMessageBinary()
 	}
 	log.Info("Websocket Message received: " + string(message)[:20])
 	return message

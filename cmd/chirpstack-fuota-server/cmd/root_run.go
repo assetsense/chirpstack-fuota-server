@@ -30,19 +30,17 @@ func run(cmd *cobra.Command, args []string) error {
 		if err := t(); err != nil {
 			log.Error(err)
 			if i == 3 {
-				SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+				// SendUdpMessage("mgfuota,mgmonitor,appinitfail")
 				// SendUdpMessage("mgfuota,mgmonitor,2002:Chirpstack connection failed")
 				return errors.New("chirpstack connection failed")
 			} else if i == 4 {
-				SendUdpMessage("mgfuota,mgmonitor,appinitfail")
+				// SendUdpMessage("mgfuota,mgmonitor,appinitfail")
 				// SendUdpMessage("mgfuota,mgmonitor,2003:Fuota grpc setup failed")
 				return errors.New("fuota grpc setup failed")
 			}
 			// log.Error(err)
 		}
 	}
-	SendUdpMessage("mgfuota,mgmonitor,appinitsuccess")
-
 	return nil
 }
 
