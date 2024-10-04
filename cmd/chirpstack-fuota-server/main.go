@@ -131,7 +131,7 @@ func main() {
 	// StartScheduler()
 	go ReceiveUdpMessages()
 	time.Sleep(3 * time.Second)
-	SendUdpMessage("mgfuota,mgmonitor,isinitialised")
+	SendUdpMessage("mgfuota,mgmonitor,started")
 	// GetToPreviousState()
 
 	sigChan := make(chan os.Signal, 1)
@@ -425,8 +425,6 @@ func handleUdpMessage(message string) {
 			SendUdpMessage("mgfuota,mgmonitor,hello")
 		} else if msg == "initialised" {
 			GetToPreviousState()
-		} else if msg == "uninitialised" {
-			SendUdpMessage("mgfuota,mgmonitor,started")
 		} else if msg == "healthcheck" {
 			SendUdpMessage("mgfuota,mgmonitor,healthchecksuccess")
 		}
