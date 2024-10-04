@@ -131,7 +131,8 @@ func main() {
 	// StartScheduler()
 	go ReceiveUdpMessages()
 	time.Sleep(3 * time.Second)
-	GetToPreviousState()
+	SendUdpMessage("mgfuota,mgmonitor,isinitialised")
+	// GetToPreviousState()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -245,7 +246,7 @@ func GetToPreviousState() {
 			state = 3
 		}
 		state = 4
-		SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
+		// SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
 		StartScheduler()
 	} else {
 		state = 0
@@ -388,7 +389,7 @@ func handleUdpMessage(message string) {
 		} else if msg == "sysready" {
 			if state == 3 {
 				state = 4
-				SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
+				// SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
 				StartScheduler()
 			}
 			// api.SaveState("sysready")
@@ -422,6 +423,12 @@ func handleUdpMessage(message string) {
 			}
 		} else if msg == "hello" {
 			SendUdpMessage("mgfuota,mgmonitor,hello")
+		} else if msg == "initialised" {
+			GetToPreviousState()
+		} else if msg == "uninitialised" {
+			SendUdpMessage("mgfuota,mgmonitor,started")
+		} else if msg == "healthcheck" {
+			SendUdpMessage("mgfuota,mgmonitor,healthchecksuccess")
 		}
 	}
 
@@ -542,7 +549,7 @@ func RefreshFuota() error {
 			state = 3
 		}
 		state = 4
-		SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
+		// SendUdpMessage("mgfuota,mgmonitor,sysreadysuccess")
 		StartScheduler()
 	}
 	return nil

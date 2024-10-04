@@ -85,6 +85,11 @@ type FirmwareUpdateResponse struct {
 	} `json:"models"`
 }
 
+type FuotaIntervalResponse struct {
+	MsgType       string `json:"msg_type"`
+	FuotaInterval string `json:"FUOTA_INTERVAL"`
+}
+
 type FirmwareResponse struct {
 	MsgType  string `json:"msg_type"`
 	ModelId  int    `json:"modelId"`
@@ -457,7 +462,7 @@ func handleMessage(message string) {
 				}
 			}
 			var payload []byte = GetFirmwarePayload(model.ModelId, model.Version)
-
+			var fuotaInterval float64 = GetFuotaInterval()
 			// Loop over the map and print the region and devices
 			for region, devices := range deviceMap {
 				readyDevices := prepareDevicesForUpdate(devices, model.Version)
@@ -468,7 +473,7 @@ func handleMessage(message string) {
 
 				currentTime := time.Now()
 
-				targetTime := currentTime.Add(time.Duration(C2config.FuotaInterval) * time.Second)
+				targetTime := currentTime.Add(time.Duration(fuotaInterval*3600) * time.Second)
 
 				targetTimeEpoch := targetTime.Unix()
 
@@ -495,6 +500,25 @@ func handleMessage(message string) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func GetFuotaInterval() float64 {
+	log.Info("Getting fuota interval from C2")
+	request := `{"msg_type":"REQ_MG_SETTINGS"}`
+	SendWSMessage(request)
+
+	var message = ReceiveWSMessage()
+	var response FuotaIntervalResponse
+	err := json.Unmarshal([]byte(message), &response)
+	if err != nil {
+		log.Fatalf("Error unmarshalling FuotaIntervalResponse: %v", err)
+	}
+	val, err := strconv.ParseFloat(response.FuotaInterval, 64)
+	if err != nil {
+		log.Fatal("Error converting string to float64:", err)
+	}
+	log.Info("Fuota interval is: ", val)
+	return val
 }
 
 func prepareDevicesForUpdate(devices []storage.Device, modelVersion string) []storage.Device {
@@ -755,10 +779,10 @@ func GetC2ConfigFromToml() C2Config {
 		log.Fatal("frequency not found in c2intbootconfig.toml file")
 	}
 
-	c2config.FuotaInterval = viper.GetInt64("c2App.fuotainterval")
-	if c2config.FuotaInterval == 0 {
-		log.Fatal("fuotainterval not found in c2intbootconfig.toml file")
-	}
+	// c2config.FuotaInterval = viper.GetInt64("c2App.fuotainterval")
+	// if c2config.FuotaInterval == 0 {
+	// 	log.Fatal("fuotainterval not found in c2intbootconfig.toml file")
+	// }
 	c2config.SessionTime = viper.GetInt("c2App.sessiontime")
 	if c2config.SessionTime == 0 {
 		log.Fatal("sessiontime not found in c2intbootconfig.toml file")

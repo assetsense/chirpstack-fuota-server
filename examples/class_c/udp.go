@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"time"
 )
 
 func main() {
@@ -23,9 +22,21 @@ func main() {
 	defer conn.Close()
 
 	// // ReceiveUdpMessages()
+	// currentTime := time.Now()
+	// var interval float64 = 0.0166667
+	// targetTime := currentTime.Add(time.Duration(interval*3600) * time.Second)
 
-	SendUdpMessage(conn, "mgmonitor,all,c2connect")
-	time.Sleep(3 * time.Second)
+	// // targetTimeEpoch := targetTime.Unix()
+
+	// duration := targetTime.Sub(currentTime)
+	// fmt.Println("duration:" + duration.String())
+
+	// timer := time.NewTimer(duration)
+
+	// fmt.Println("Firmware update request scheduled at ", targetTime)
+	// <-timer.C
+	SendUdpMessage(conn, "mgmonitor,all,initialised")
+	// time.Sleep(3 * time.Second)
 
 	// SendUdpMessage(conn, "mgmonitor,all,appinit")
 	// time.Sleep(3 * time.Second)
