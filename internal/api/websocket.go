@@ -176,9 +176,14 @@ func CloseWSConnection() {
 }
 
 func SendWSMessage(message string) {
+
+	if err := WSConn.PongHandler(); err != nil {
+		log.Println("WebSocket connection is closed or in an invalid state")
+		InitWSConnection()
+	}
 	err := WSConn.WriteMessage(websocket.TextMessage, []byte(message))
 	if err != nil {
-		log.Fatal("Write error:", err)
+		log.Info("Write error:", err)
 		InitWSConnection()
 		SendUdpMessage(message)
 	}
@@ -186,9 +191,13 @@ func SendWSMessage(message string) {
 }
 
 func ReceiveWSMessage() string {
+	if err := WSConn.PongHandler(); err != nil {
+		log.Println("WebSocket connection is closed or in an invalid state")
+		InitWSConnection()
+	}
 	_, message, err := WSConn.ReadMessage()
 	if err != nil {
-		log.Fatal("Read error:", err)
+		log.Info("Read error:", err)
 		InitWSConnection()
 		return ReceiveWSMessage()
 	}
