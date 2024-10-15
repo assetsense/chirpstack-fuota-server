@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 func main() {
@@ -35,17 +36,17 @@ func main() {
 
 	// fmt.Println("Firmware update request scheduled at ", targetTime)
 	// <-timer.C
-	SendUdpMessage(conn, "mgmonitor,all,initialised")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,c2connect")
+	time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,appinit")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,appinit")
+	time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,dbready")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,dbready")
+	time.Sleep(3 * time.Second)
 
-	// SendUdpMessage(conn, "mgmonitor,all,sysready")
-	// time.Sleep(3 * time.Second)
+	SendUdpMessage(conn, "mgmonitor,all,sysready")
+	time.Sleep(3 * time.Second)
 
 	// SendUdpMessage(conn, "mgmonitor,all,reset")
 	// time.Sleep(3 * time.Second)

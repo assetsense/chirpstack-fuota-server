@@ -15,6 +15,9 @@ var (
 	queueName    = "mgfuota"
 	exchangeName = "amq.topic"
 )
+var SLEEP int = 3
+var conn *amqp.Connection
+var err error
 
 func failOnError(err error, msg string) {
 	if err != nil {
@@ -24,10 +27,10 @@ func failOnError(err error, msg string) {
 
 func connect() (*amqp.Connection, error) {
 	for {
-		conn, err := amqp.Dial(rabbitMQURL)
+		conn, err = amqp.Dial(rabbitMQURL)
 		if err != nil {
-			log.Printf("Failed to connect to RabbitMQ: %v. Retrying in 5 seconds...", err)
-			time.Sleep(5 * time.Second)
+			log.Printf("Failed to connect to RabbitMQ: %v. Retrying in few seconds...", err)
+			time.Sleep(time.Duration(SLEEP) * time.Second)
 		} else {
 			log.Println("Successfully connected to RabbitMQ")
 			return conn, nil
@@ -61,23 +64,6 @@ func consumeMessages(ch *amqp.Channel) (<-chan amqp.Delivery, error) {
 	return msgs, nil
 }
 
-func processMessages(msgs <-chan amqp.Delivery) {
-	for msg := range msgs {
-		// log.Printf("Received a message: %s", msg.Body)
-		go processEachMessage(msg)
-
-	}
-}
-
-func processEachMessage(msg amqp.Delivery) {
-	var uplinkEvent integration.UplinkEvent
-	if err := proto.Unmarshal(msg.Body, &uplinkEvent); err != nil {
-		log.Printf("Error decoding Protobuf message: %v", err)
-		return
-	}
-	fmt.Println("\nval:", uplinkEvent)
-}
-
 func createQueue(ch *amqp.Channel) {
 	q, err := ch.QueueDeclare(
 		queueName, // name
@@ -105,23 +91,54 @@ func createQueue(ch *amqp.Channel) {
 }
 
 func main() {
-	conn, err := connect()
+
+	InitRabbitMq()
+	go checkConnection()
+
+	fmt.Scanln()
+}
+
+func InitRabbitMq() *amqp.Connection {
+	conn, err = connect()
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
 
 	ch, err := createChannel(conn)
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
 
 	createQueue(ch)
 
 	msgs, err := consumeMessages(ch)
 	failOnError(err, "Failed to register a consumer")
 
-	// forever := make(chan bool)
-
 	go processMessages(msgs)
+	return conn
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	fmt.Scanln()
+}
+
+func processMessages(msgs <-chan amqp.Delivery) {
+	log.Printf(" [*] Waiting for messages from rabbitmq")
+	for msg := range msgs {
+		processEachMessage(msg)
+
+	}
+}
+
+func processEachMessage(msg amqp.Delivery) {
+	var uplinkEvent integration.UplinkEvent
+	if err := proto.Unmarshal(msg.Body, &uplinkEvent); err != nil {
+		log.Printf("Error decoding Protobuf message: %v", err)
+		return
+	}
+	fmt.Println("\nval:", uplinkEvent)
+}
+
+func checkConnection() {
+	for {
+		time.Sleep(time.Duration(SLEEP) * time.Second)
+		if conn.IsClosed() {
+			log.Println("RabbitMQ connection is closed, stopping receiving...")
+
+			InitRabbitMq()
+		}
+	}
 }

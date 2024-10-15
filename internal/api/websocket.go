@@ -84,7 +84,6 @@ type FirmwareUpdateResponse struct {
 		Version string `json:"version"`
 	} `json:"models"`
 }
-
 type FuotaIntervalResponse struct {
 	MsgType       string `json:"msg_type"`
 	FuotaInterval string `json:"FUOTA_INTERVAL"`
@@ -149,7 +148,7 @@ func InitWSConnection() error {
 		WSConn, _, err = websocket.DefaultDialer.Dial(websocketURL, headers)
 		if err != nil {
 			log.Error("Error C2", err)
-			time.Sleep(2 * time.Second)
+			time.Sleep(30 * time.Second)
 			continue // Retry connection in
 			// return err
 		}
@@ -157,6 +156,24 @@ func InitWSConnection() error {
 		log.Info("Websocket Connection Established")
 		break
 	}
+
+	WSConn.SetCloseHandler(func(code int, text string) error {
+		log.Info("WebSocket connection closed by server: ", code, text)
+		WSConn.Close()
+		return nil
+	})
+
+	err := WSConn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+	if err != nil {
+		log.Info("Set write deadline error:", err)
+		WSConn.Close()
+	}
+	err = WSConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	if err != nil {
+		log.Info("Set read deadline error:", err)
+		WSConn.Close()
+	}
+
 	return nil
 
 }
@@ -176,42 +193,35 @@ func CloseWSConnection() {
 }
 
 func SendWSMessage(message string) {
-
-	if err := WSConn.PongHandler(); err != nil {
-		log.Println("WebSocket connection is closed or in an invalid state")
-		InitWSConnection()
-	}
 	err := WSConn.WriteMessage(websocket.TextMessage, []byte(message))
 	if err != nil {
 		log.Info("Write error:", err)
 		InitWSConnection()
-		SendUdpMessage(message)
+		SendWSMessage(message)
 	}
 	log.Info("Websocket Message Sent: " + message)
 }
 
-func ReceiveWSMessage() string {
-	if err := WSConn.PongHandler(); err != nil {
-		log.Println("WebSocket connection is closed or in an invalid state")
-		InitWSConnection()
-	}
+func ReceiveWSMessage(request string) string {
 	_, message, err := WSConn.ReadMessage()
 	if err != nil {
 		log.Info("Read error:", err)
 		InitWSConnection()
-		return ReceiveWSMessage()
+		SendWSMessage(request)
+		return ReceiveWSMessage(request)
 	}
 	messageStr := string(message)
 	log.Info("Websocket Message received: " + messageStr)
 	return messageStr
 }
 
-func ReceiveWSMessageBinary() []byte {
+func ReceiveWSMessageBinary(request string) []byte {
 	_, message, err := WSConn.ReadMessage()
 	if err != nil {
-		log.Fatal("Read error:", err)
+		log.Info("Read error:", err)
 		InitWSConnection()
-		return ReceiveWSMessageBinary()
+		SendWSMessage(request)
+		return ReceiveWSMessageBinary(request)
 	}
 	log.Info("Websocket Message received: " + string(message)[:20])
 	return message
@@ -235,6 +245,7 @@ func ReceiveMessageDummyForFirmware() []byte {
 }
 
 func Scheduler() {
+
 	var C2config C2Config = GetC2ConfigFromToml()
 	stopScheduler = false
 	frequency, err := ParseFrequency(C2config.Frequency)
@@ -292,11 +303,12 @@ func StopScheduler() {
 func SendFailedDevicesStatus() {
 	// log.Info("Checking for firmware updates")
 	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
-	SendWSMessage("{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}")
+	request := "{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}"
+	SendWSMessage(request)
 
 	//Respose format - {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{"modelId":1234, \"version\":\"1.0.1\"}]}]};
 	// response := ReceiveMessageDummyForModels()
-	message := ReceiveWSMessage()
+	message := ReceiveWSMessage(request)
 
 	var response FirmwareUpdateResponse
 	err := json.Unmarshal([]byte(message), &response)
@@ -420,13 +432,14 @@ func CheckForFirmwareUpdate() {
 
 	log.Info("Checking for firmware updates")
 	//Request format - {"msg_typ":"FIRMWARE_UPDATES", "ls":0}
-	SendWSMessage("{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}")
+	request := "{\"msg_type\":\"FIRMWARE_UPDATE\", \"ls\":0}"
+	SendWSMessage(request)
 
 	//Respose format - {\"msg_type\":\"FIRMWARE_UPDATES_RES\", \"models\":[{"modelId":1234, \"version\":\"1.0.1\"}]}]};
 	// response := ReceiveMessageDummyForModels()
-	response := ReceiveWSMessage()
+	response := ReceiveWSMessage(request)
 
-	go handleMessage(response)
+	handleMessage(response)
 }
 
 func handleMessage(message string) {
@@ -516,7 +529,7 @@ func GetFuotaInterval() float64 {
 	request := `{"msg_type":"REQ_MG_SETTINGS"}`
 	SendWSMessage(request)
 
-	var message = ReceiveWSMessage()
+	var message = ReceiveWSMessage(request)
 	var response FuotaIntervalResponse
 	err := json.Unmarshal([]byte(message), &response)
 	if err != nil {
@@ -704,7 +717,7 @@ func GetFirmwarePayload(modelId int, version string) []byte {
 	// if err != nil {
 	// 	log.Error("Error decoding Base64 firmware string:", err)
 	// }
-	responseBytes := ReceiveWSMessageBinary()
+	responseBytes := ReceiveWSMessageBinary(request)
 
 	var universal pb.Universal
 	err := proto.Unmarshal(responseBytes, &universal)
@@ -870,5 +883,5 @@ func SendUdpMessage(message string) {
 		return
 	}
 
-	log.Info("Message sent:", string(message))
+	log.Info("UDP Message sent:", string(message))
 }
