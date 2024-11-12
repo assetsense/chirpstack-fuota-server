@@ -36,7 +36,7 @@ func GetDevicesByModelAndVersion(ctx context.Context, db sqlx.Queryer, modelId i
 	query := `
 		SELECT devicecode, modelid, profileid, firmwareversion, status
 		FROM chirpstack.device
-		WHERE modelid = $1 and status = 4270 and firmwareUpdateFailed = False and attempts < 3
+		WHERE modelid = $1 and status IN (4270, 6170) and firmwareUpdateFailed = False and attempts < 3
 	`
 	if err := sqlx.Select(db, &devices, query, modelId); err != nil {
 		return nil, fmt.Errorf("sql select error: %w", err)
